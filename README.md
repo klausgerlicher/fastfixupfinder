@@ -18,7 +18,7 @@ When you edit files in a project, those changes often touch lines that were crea
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/kgerlich/fastfixupfinder.git
 cd fastfixupfinder
 
 # Install the tool
