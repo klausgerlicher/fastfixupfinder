@@ -146,11 +146,10 @@ python3 -m fastfixupfinder.cli --help
 fastfixupfinder status
 
 # See detailed analysis of your changes
-fastfixupfinder analyze
+fastfixupfinder status --detailed
 
 # Show compact one-line output
 fastfixupfinder status --oneline
-fastfixupfinder analyze --oneline
 
 # Preview what fixup commits would be created
 fastfixupfinder create --dry-run
@@ -168,8 +167,7 @@ fastfixupfinder create
 |---------|-------------|
 | `status` | Show potential fixup targets without making changes |
 | `status --oneline` | Show compact one-line output per target |
-| `analyze` | Show detailed analysis of changes and their target commits |
-| `analyze --oneline` | Show compact analysis output |
+| `status --detailed` | Show detailed analysis of changes and their target commits |
 | `create` | Create fixup commits for identified targets |
 | `create --dry-run` | Preview what would be created without making changes |
 | `create --interactive` | Interactively select which targets to create fixups for |
@@ -179,9 +177,9 @@ fastfixupfinder create
 
 ### Command Details
 
-#### `status` vs `analyze`
+#### `status` Command Modes
 
-**`fastfixupfinder status`** - Quick overview
+**`fastfixupfinder status`** - Quick overview (default)
 ```bash
 Found 2 potential fixup targets:
 
@@ -196,7 +194,7 @@ Found 2 potential fixup targets:
   Changed lines: 2
 ```
 
-**`fastfixupfinder analyze`** - Detailed breakdown
+**`fastfixupfinder status --detailed`** - Detailed breakdown
 ```bash
 Detailed analysis of 2 fixup targets:
 
@@ -224,8 +222,7 @@ e5f6g7h8 Fix validation logic (1 files, 2 lines)
 **When to use:**
 - **`status`** - Quick check before creating fixups, get overview of targets
 - **`status --oneline`** - Even more compact output for scripts or quick scans
-- **`analyze`** - Detailed review of exact changes, verify detection accuracy
-- **`analyze --oneline`** - Compact analysis for quick overview
+- **`status --detailed`** - Detailed review of exact changes, verify detection accuracy
 
 ## 🛡️ Safety Features
 
@@ -341,8 +338,9 @@ This tool is particularly useful when:
 ### Global Options
 - `--repo PATH` - Specify repository path (default: current directory)
 
-### Status and Analyze Command Options
+### Status Command Options
 - `--oneline` - Show compact one-line output per target
+- `--detailed` - Show detailed analysis of changes and target commits
 
 ### Create Command Options
 - `--dry-run` - Show what would be done without making changes
