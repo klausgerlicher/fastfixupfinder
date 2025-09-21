@@ -6,6 +6,7 @@ from pathlib import Path
 import click
 
 from .fixup_creator import FixupCreator, Colors
+from .git_analyzer import FilterMode
 
 
 @click.group()
@@ -19,11 +20,24 @@ def main():
 @click.option('--repo', default='.', help='Path to git repository (default: current directory)')
 @click.option('--oneline', is_flag=True, help='Show compact one-line output per target')
 @click.option('--detailed', is_flag=True, help='Show detailed analysis of changes and target commits')
-def status(repo, oneline, detailed):
+@click.option('--fixups-only', is_flag=True, help='Only show high-confidence fixup targets')
+@click.option('--include-all', is_flag=True, help='Include all changes regardless of fixup likelihood')
+def status(repo, oneline, detailed, fixups_only, include_all):
     """Show current fixup targets without making any changes."""
     try:
+        # Determine filter mode from flags
+        if fixups_only and include_all:
+            click.echo(Colors.colorize("❌ Error: Cannot use both --fixups-only and --include-all", Colors.BRIGHT_RED), err=True)
+            sys.exit(1)
+        elif fixups_only:
+            filter_mode = FilterMode.FIXUPS_ONLY
+        elif include_all:
+            filter_mode = FilterMode.INCLUDE_ALL
+        else:
+            filter_mode = FilterMode.SMART_DEFAULT
+        
         creator = FixupCreator(repo)
-        targets = creator.analyzer.find_fixup_targets()
+        targets = creator.analyzer.find_fixup_targets(filter_mode)
         
         if not targets:
             if oneline:
@@ -211,3 +225,4 @@ each commit represents a logical change.
 
 if __name__ == '__main__':
     main()# final test for rebase command visibility
+# Testing classification system

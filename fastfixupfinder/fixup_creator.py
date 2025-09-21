@@ -51,7 +51,7 @@ class FixupCreator:
     
     def create_fixup_commits(self, dry_run: bool = False, auto_backup: bool = True) -> List[str]:
         """Create fixup commits for all identified targets."""
-        fixup_targets = self.analyzer.find_fixup_targets()
+        fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         created_commits = []
         
         if not fixup_targets:
@@ -123,7 +123,7 @@ class FixupCreator:
     
     def interactive_fixup_selection(self) -> List[str]:
         """Interactively select which fixup commits to create."""
-        fixup_targets = self.analyzer.find_fixup_targets()
+        fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         created_commits = []
         
         if not fixup_targets:
@@ -313,7 +313,7 @@ class FixupCreator:
     
     def status(self) -> None:
         """Show current status of potential fixup targets."""
-        fixup_targets = self.analyzer.find_fixup_targets()
+        fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         
         if not fixup_targets:
             print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
@@ -367,7 +367,7 @@ class FixupCreator:
     
     def status_oneline(self) -> None:
         """Show current status of potential fixup targets in compact one-line format."""
-        fixup_targets = self.analyzer.find_fixup_targets()
+        fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         
         if not fixup_targets:
             print(Colors.colorize("No fixup targets found.", Colors.YELLOW))

@@ -4,9 +4,26 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
+from datetime import datetime, timedelta
+from enum import Enum
 import difflib
 
 import git
+
+
+class ChangeClassification(Enum):
+    """Classification of change types."""
+    LIKELY_FIXUP = "likely_fixup"          # Small fixes, typos, style changes
+    POSSIBLE_FIXUP = "possible_fixup"       # Could be fixup or small feature
+    UNLIKELY_FIXUP = "unlikely_fixup"       # Large additions, new features
+    NEW_FILE = "new_file"                   # Completely new files
+
+
+class FilterMode(Enum):
+    """Filtering modes for change analysis."""
+    SMART_DEFAULT = "smart_default"         # Use heuristics to filter likely fixups
+    FIXUPS_ONLY = "fixups_only"            # Only show high-confidence fixups
+    INCLUDE_ALL = "include_all"             # Show all changes regardless
 
 
 @dataclass(frozen=True)
@@ -16,6 +33,8 @@ class ChangedLine:
     line_number: int
     content: str
     change_type: str  # 'added', 'modified', 'deleted'
+    classification: ChangeClassification = ChangeClassification.POSSIBLE_FIXUP
+    context_lines: Optional[List[str]] = None  # Surrounding lines for better analysis
 
 
 @dataclass(frozen=True)
@@ -37,6 +56,123 @@ class FixupTarget:
     files: Set[str]
 
 
+class ChangeClassifier:
+    """Classifies changes to determine fixup likelihood."""
+    
+    def __init__(self, repo: git.Repo):
+        self.repo = repo
+    
+    def classify_change(self, change: ChangedLine, target_commit_hash: str = None) -> ChangeClassification:
+        """Classify a change based on multiple heuristics."""
+        # Check if it's a new file
+        if self._is_new_file(change.file_path):
+            return ChangeClassification.NEW_FILE
+        
+        # Content-based heuristics
+        if self._is_likely_fixup_content(change):
+            return ChangeClassification.LIKELY_FIXUP
+        
+        # Size-based heuristics
+        if self._is_large_change(change):
+            return ChangeClassification.UNLIKELY_FIXUP
+        
+        # Time-based heuristics (if target commit provided)
+        if target_commit_hash and self._is_old_commit(target_commit_hash):
+            return ChangeClassification.UNLIKELY_FIXUP
+        
+        # Structure-based heuristics
+        if self._adds_new_structure(change):
+            return ChangeClassification.UNLIKELY_FIXUP
+        
+        return ChangeClassification.POSSIBLE_FIXUP
+    
+    def _is_new_file(self, file_path: str) -> bool:
+        """Check if this is a completely new file."""
+        try:
+            # Try to get the file from HEAD
+            self.repo.git.show(f"HEAD:{file_path}")
+            return False
+        except git.exc.GitCommandError:
+            return True
+    
+    def _is_likely_fixup_content(self, change: ChangedLine) -> bool:
+        """Check if content suggests this is likely a fixup."""
+        content = change.content.strip().lower()
+        
+        # Typo fixes and small corrections
+        fixup_patterns = [
+            r'\b(fix|correct|update)\b',  # Fix/correct/update
+            r'\b(typo|spelling|grammar)\b',  # Typo fixes
+            r'\b(format|style|indent)\b',  # Style fixes
+            r'^\s*(#|//|\*)',  # Comment changes
+            r'^[^a-zA-Z]*$',  # Only symbols/numbers (formatting)
+            r'^\s*["\'].*["\'][\s,;]*$',  # String literal changes
+        ]
+        
+        for pattern in fixup_patterns:
+            if re.search(pattern, content):
+                return True
+        
+        # Small single-character or word changes
+        if len(content) < 10:
+            return True
+        
+        return False
+    
+    def _is_large_change(self, change: ChangedLine) -> bool:
+        """Check if this is a large change suggesting new feature."""
+        content = change.content.strip()
+        
+        # Long lines suggest substantial additions
+        if len(content) > 100:
+            return True
+        
+        # Complex expressions suggest new logic
+        complexity_indicators = [
+            r'def\s+\w+\s*\(',  # New function definition
+            r'class\s+\w+',     # New class definition
+            r'import\s+\w+',    # New imports
+            r'if\s+.*:\s*$',    # New conditional blocks
+            r'for\s+.*:\s*$',   # New loops
+            r'while\s+.*:\s*$', # New while loops
+        ]
+        
+        for pattern in complexity_indicators:
+            if re.search(pattern, content):
+                return True
+        
+        return False
+    
+    def _is_old_commit(self, commit_hash: str, days_threshold: int = 30) -> bool:
+        """Check if the target commit is old (less likely to need fixups)."""
+        try:
+            commit = self.repo.commit(commit_hash)
+            commit_date = datetime.fromtimestamp(commit.committed_date)
+            age = datetime.now() - commit_date
+            return age > timedelta(days=days_threshold)
+        except:
+            return False
+    
+    def _adds_new_structure(self, change: ChangedLine) -> bool:
+        """Check if change adds new structural elements."""
+        content = change.content.strip()
+        
+        # Look for new structural additions
+        structure_patterns = [
+            r'^\s*def\s+\w+',      # New function
+            r'^\s*class\s+\w+',    # New class  
+            r'^\s*if\s+__name__',  # New main block
+            r'^\s*@\w+',           # New decorator
+            r'^\s*from\s+\w+\s+import',  # New imports
+        ]
+        
+        for pattern in structure_patterns:
+            if re.search(pattern, content):
+                return True
+        
+        return False
+
+
 class GitAnalyzer:
     """Analyzes git repository to find fixup targets."""
     
@@ -44,6 +180,7 @@ class GitAnalyzer:
         """Initialize with repository path."""
         self.repo = git.Repo(repo_path)
         self.repo_path = Path(repo_path)
+        self.classifier = ChangeClassifier(self.repo)
     
     def get_changed_lines(self) -> List[ChangedLine]:
         """Get all changed lines in the working directory."""
@@ -60,7 +197,10 @@ class GitAnalyzer:
         # Post-process to detect delete/add pairs as modifications
         enhanced_lines = self._enhance_change_detection(changed_lines)
         
-        return enhanced_lines
+        # Classify all changes for fixup likelihood
+        classified_lines = self._classify_changes(enhanced_lines)
+        
+        return classified_lines
     
     def _parse_diff(self, diff_output: str, change_source: str) -> List[ChangedLine]:
         """Parse git diff output to extract changed lines."""
@@ -185,6 +325,26 @@ class GitAnalyzer:
         
         return enhanced_lines
     
+    def _classify_changes(self, changed_lines: List[ChangedLine]) -> List[ChangedLine]:
+        """Classify all changes for fixup likelihood."""
+        classified_lines = []
+        
+        for line in changed_lines:
+            classification = self.classifier.classify_change(line)
+            
+            # Create new ChangedLine with classification
+            classified_line = ChangedLine(
+                file_path=line.file_path,
+                line_number=line.line_number,
+                content=line.content,
+                change_type=line.change_type,
+                classification=classification,
+                context_lines=line.context_lines
+            )
+            classified_lines.append(classified_line)
+        
+        return classified_lines
+    
     def _calculate_similarity(self, str1: str, str2: str) -> float:
         """Calculate similarity between two strings using difflib."""
         # Remove leading/trailing whitespace for comparison
@@ -236,7 +396,7 @@ class GitAnalyzer:
         except git.exc.GitCommandError:
             return None
     
-    def find_fixup_targets(self) -> List[FixupTarget]:
+    def find_fixup_targets(self, filter_mode: FilterMode = FilterMode.SMART_DEFAULT) -> List[FixupTarget]:
         """Find all potential fixup targets based on current changes."""
         changed_lines = self.get_changed_lines()
         
@@ -287,7 +447,39 @@ class GitAnalyzer:
             except git.exc.BadName:
                 continue
         
-        return fixup_targets
+        # Apply filtering based on filter mode
+        filtered_targets = self._filter_targets_by_mode(fixup_targets, filter_mode)
+        
+        return filtered_targets
+    
+    def _filter_targets_by_mode(self, targets: List[FixupTarget], filter_mode: FilterMode) -> List[FixupTarget]:
+        """Filter fixup targets based on the specified filter mode."""
+        if filter_mode == FilterMode.INCLUDE_ALL:
+            return targets
+        
+        filtered_targets = []
+        for target in targets:
+            # Analyze the classification of changes in this target
+            classifications = [line.classification for line in target.changed_lines]
+            
+            if filter_mode == FilterMode.FIXUPS_ONLY:
+                # Only include targets with mostly likely fixups
+                likely_count = classifications.count(ChangeClassification.LIKELY_FIXUP)
+                total_count = len(classifications)
+                if likely_count / total_count >= 0.5:  # At least 50% likely fixups
+                    filtered_targets.append(target)
+            
+            elif filter_mode == FilterMode.SMART_DEFAULT:
+                # Exclude targets that are clearly new features
+                new_file_count = classifications.count(ChangeClassification.NEW_FILE)
+                unlikely_count = classifications.count(ChangeClassification.UNLIKELY_FIXUP)
+                total_count = len(classifications)
+                
+                # Skip if most changes are new files or unlikely fixups
+                if (new_file_count + unlikely_count) / total_count < 0.7:  # Less than 70% unlikely
+                    filtered_targets.append(target)
+        
+        return filtered_targets
     
     def _find_context_commits(self, file_path: str, line_number: int) -> List[str]:
         """Find commits of nearby lines for context."""
