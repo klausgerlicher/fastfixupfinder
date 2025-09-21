@@ -299,9 +299,20 @@ This tool is particularly useful when:
    PYTHONPATH=. python3 -m fastfixupfinder.cli
    ```
 
-5. **Permission errors** - Ensure you have write access to the git repository
+5. **Package installs as "UNKNOWN"** - Older pip version issue:
+   ```bash
+   # Upgrade pip to latest version
+   pip install --upgrade pip
+   
+   # Clean and reinstall
+   pip uninstall UNKNOWN -y
+   rm -rf *.egg-info build dist
+   pip install --user .
+   ```
 
-6. **Virtual environment issues** - Make sure your virtual environment is activated:
+6. **Permission errors** - Ensure you have write access to the git repository
+
+7. **Virtual environment issues** - Make sure your virtual environment is activated:
    ```bash
    source venv/bin/activate  # Linux/macOS
    venv\Scripts\activate     # Windows
