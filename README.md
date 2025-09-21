@@ -171,6 +171,47 @@ fastfixupfinder create
 | `restore` | Restore from automatic safety backup |
 | `help-usage` | Show detailed usage examples and workflow guidance |
 
+### Command Details
+
+#### `status` vs `analyze`
+
+**`fastfixupfinder status`** - Quick overview
+```bash
+Found 2 potential fixup targets:
+
+• a1b2c3d4: Add user authentication feature
+  Author: John Doe <john@example.com>  
+  Files: auth.py, models.py
+  Changed lines: 5
+
+• e5f6g7h8: Fix validation logic
+  Author: Jane Smith <jane@example.com>
+  Files: validators.py
+  Changed lines: 2
+```
+
+**`fastfixupfinder analyze`** - Detailed breakdown
+```bash
+Detailed analysis of 2 fixup targets:
+
+1. Target Commit: a1b2c3d4567890abcdef1234567890abcdef1234
+   Message: Add user authentication feature
+   Author: John Doe <john@example.com>
+   Affected files: 2
+     auth.py (3 changes)
+       + Line 15: def authenticate_user(username, password):...
+       ~ Line 23:     return validate_credentials(user)...
+       - Line 31:     # TODO: Add logging...
+
+     models.py (2 changes)
+       + Line 45: class UserSession:...
+       + Line 67:     def is_valid(self):...
+```
+
+**When to use:**
+- **`status`** - Quick check before creating fixups, get overview of targets
+- **`analyze`** - Detailed review of exact changes, verify detection accuracy
+
 ## 🛡️ Safety Features
 
 Fast Fixup Finder includes built-in safety features:
