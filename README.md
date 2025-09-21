@@ -178,21 +178,21 @@ fastfixupfinder create
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `status` | Show potential fixup targets without making changes (smart filtering) |
-| `status --oneline` | Show compact one-line output per target |
-| `status --detailed` | Show detailed analysis of changes and target commits |
-| `status --fixups-only` | Only show high-confidence fixup targets |
-| `status --include-all` | Include all changes regardless of fixup likelihood |
-| `create` | Create fixup commits for identified targets |
-| `create --dry-run` | Preview what would be created without making changes |
-| `create --interactive` | Interactively select targets with line-level classification control |
-| `create --interactive --oneline` | Use compact output in interactive mode for better readability |
-| `gui` | Launch visual ncurses GUI for drag-and-drop fixup assignment |
-| `create --no-backup` | Skip automatic safety backup (not recommended) |
-| `restore` | Restore from automatic safety backup |
-| `help-usage` | Show detailed usage examples and workflow guidance |
+| Command | Description | Best For |
+|---------|-------------|----------|
+| `status` | Show potential fixup targets (smart filtering) | Quick overview, daily workflow |
+| `status --oneline` | Show compact one-line output per target | Scripts, CI/CD, quick scans |
+| `status --detailed` | Show detailed analysis with line-by-line breakdown | Code review, verification |
+| `status --fixups-only` | Only show high-confidence fixup targets | Focused workflow, avoiding noise |
+| `status --include-all` | Include all changes regardless of likelihood | Manual review, debugging |
+| `create` | Create fixup commits automatically | Simple cases, trusted automation |
+| `create --dry-run` | Preview what would be created | Safety, verification before commit |
+| `create --interactive` | Line-level control with detailed output | Precise control, complex assignments |
+| `create --interactive --oneline` | Compact interactive mode | Many changes, reduced clutter |
+| `gui` | **Visual drag-and-drop interface** | **Complex workflows, visual users** |
+| `create --no-backup` | Skip automatic safety backup | Advanced users, CI environments |
+| `restore` | Restore from automatic safety backup | Error recovery, undo operations |
+| `help-usage` | Show detailed usage examples | Learning, reference |
 
 ### Command Details
 
@@ -300,9 +300,21 @@ The interactive mode (`--interactive`) now provides line-level classification co
 - Content preview with line numbers
 - Final selection summary with totals
 
-### **Example Interactive Sessions**
+### **Example Sessions**
 
-**Full Mode (detailed output):**
+**🎨 Visual GUI Mode (Recommended for Complex Cases):**
+```bash
+$ fastfixupfinder gui
+
+# Visual interface opens with:
+# • Left panel: All changes grouped by file with color-coded classifications
+# • Right panel: Fixup targets with assignment counts
+# • TAB to switch panels, ↑↓ to navigate, ENTER to assign
+# • Real-time visual feedback and assignment tracking
+# • Press 'c' to create fixup commits when ready
+```
+
+**📝 Interactive CLI Mode (Full Control):**
 ```bash
 $ fastfixupfinder create --interactive
 
@@ -377,7 +389,7 @@ $ fastfixupfinder gui
 
 The GUI provides an intuitive visual workflow that makes managing complex fixup assignments effortless!
 
-**Compact Mode (for many changes):**
+**📝 Interactive CLI Mode (Compact):**
 ```bash
 $ fastfixupfinder create --interactive --oneline
 
@@ -415,22 +427,38 @@ Fast Fixup Finder includes built-in safety features:
 
 See [SAFETY.md](SAFETY.md) for comprehensive safety strategies and emergency recovery procedures.
 
-## Typical Workflow
+## Typical Workflows
 
+### 🎨 **Visual Workflow (Recommended)**
 ```mermaid
 graph LR
-    A[Make changes to files] --> B[fastfixupfinder status]
-    B --> C{Review targets}
-    C --> D[fastfixupfinder create -i]
+    A[Make changes] --> B[fastfixupfinder gui]
+    B --> C[Drag changes to targets]
+    C --> D[Press 'c' to create fixups]
     D --> E[git rebase -i --autosquash]
-    E --> F[Clean commit history]
+    E --> F[Clean history]
 ```
 
 1. **Make changes** to your files across the project
-2. **Run** `fastfixupfinder status` to see potential targets
-3. **Review** which commits your changes would fix up
-4. **Run** `fastfixupfinder create --interactive` to selectively create fixups
-5. **Apply** fixups with the suggested `git rebase -i --autosquash` command
+2. **Launch GUI** with `fastfixupfinder gui`
+3. **Visually assign** changes by navigating and pressing ENTER
+4. **Create fixups** by pressing 'c' in the GUI
+5. **Apply** with the suggested rebase command
+
+### 📝 **CLI Workflow (Quick)**
+```mermaid
+graph LR
+    A[Make changes] --> B[fastfixupfinder status]
+    B --> C{Review targets}
+    C --> D[fastfixupfinder create]
+    D --> E[git rebase -i --autosquash]
+    E --> F[Clean history]
+```
+
+1. **Make changes** to your files
+2. **Check status** with `fastfixupfinder status`
+3. **Auto-create** with `fastfixupfinder create` (or `--interactive` for control)
+4. **Apply** with the suggested rebase command
 
 ## Example Session
 
@@ -512,6 +540,8 @@ This tool is particularly useful when:
 - 📝 **Improving documentation** or comments in existing code
 - 🧹 **Maintaining clean commit history** without manual rebasing
 - 👥 **Collaborating** with teams that value atomic commits
+- 🎨 **Complex fixup scenarios** where visual assignment is helpful
+- ⚡ **Large codebases** with many interconnected changes
 
 ## Options
 

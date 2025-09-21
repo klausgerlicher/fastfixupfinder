@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Fast Fixup Finder is a Python CLI tool that automatically identifies fixup targets and creates fixup commits based on current changes. It uses git blame to trace modified lines back to their original commits and groups changes appropriately.
+Fast Fixup Finder is a comprehensive Python tool for intelligent fixup commit management. It provides multiple interfaces (CLI, interactive, and visual GUI) to automatically identify fixup targets and create fixup commits based on current changes. It uses git blame to trace modified lines back to their original commits, intelligent classification to distinguish fixups from new features, and groups changes appropriately.
 
 ## Commands
 
@@ -23,11 +23,16 @@ python3 setup_path.py        # Automatic PATH configuration
 setup_path.bat               # Windows script
 
 # Run the tool
-fastfixupfinder status          # Show potential fixup targets
-fastfixupfinder analyze         # Detailed analysis
-fastfixupfinder create          # Create fixup commits
-fastfixupfinder create -i       # Interactive mode
+fastfixupfinder status          # Show potential fixup targets (smart filtering)
+fastfixupfinder status --detailed # Detailed analysis (replaces old analyze command)
+fastfixupfinder status --fixups-only # Only high-confidence fixups
+fastfixupfinder status --include-all # All changes, no filtering
+fastfixupfinder create          # Create fixup commits automatically
+fastfixupfinder create -i       # Interactive mode with line-level control
+fastfixupfinder create -i --oneline # Compact interactive mode
 fastfixupfinder create --dry-run # Preview mode
+fastfixupfinder gui             # Visual drag-and-drop interface
+fastfixupfinder restore         # Restore from automatic backup
 
 # Testing and demonstration
 ./run_demo.sh                   # Interactive demo walkthrough
@@ -58,21 +63,42 @@ mypy .                          # Type checking
 - **`cli.py`**: Command-line interface
   - Click-based CLI with multiple subcommands
   - User interaction and error handling
+  - GUI command integration
 
-### Workflow
+- **`gui.py`**: Visual ncurses interface
+  - Dual-panel layout for changes and targets
+  - Drag-and-drop assignment functionality
+  - Color-coded classifications and real-time feedback
+  - Keyboard navigation and hotkeys
+
+### Workflow Options
+
+**CLI Workflow:**
 1. Analyze current working directory changes (staged/unstaged)
 2. Parse git diff output to identify changed lines
 3. Use git blame to find original commits for each line
-4. Group changes by target commit
-5. Create fixup commits with appropriate naming
-6. Suggest rebase command for applying fixups
+4. Apply intelligent classification (LIKELY/POSSIBLE/UNLIKELY fixups)
+5. Group changes by target commit with filtering
+6. Create fixup commits with appropriate naming
+7. Suggest rebase command for applying fixups
+
+**GUI Workflow:**
+1. Load changes and targets into visual interface
+2. Display changes (left panel) and targets (right panel)
+3. User assigns changes to targets via keyboard navigation
+4. Real-time visual feedback and assignment tracking
+5. Create fixup commits directly from GUI
+6. Automatic rebase command suggestion
 
 ### Key Features
-- Handles both staged and unstaged changes
-- Context-aware grouping for added lines
-- Interactive selection of fixup targets
-- Dry-run mode for safe preview
-- Automatic rebase command suggestion
+- **Intelligent Classification**: Distinguishes fixups from new features using heuristics
+- **Multiple Interfaces**: CLI, enhanced interactive, and visual GUI modes
+- **Smart Filtering**: LIKELY/POSSIBLE/UNLIKELY classifications with filtering options
+- **Line-Level Control**: Precise assignment of individual changes to fixup targets
+- **Visual Assignment**: Drag-and-drop GUI for complex workflows
+- **Safety Features**: Automatic backups and restore functionality
+- **Context-Aware Analysis**: Grouping for added lines using git blame context
+- **Flexible Output**: Compact and detailed modes for different use cases
 
 ## Best Practices
 
