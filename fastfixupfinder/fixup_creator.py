@@ -59,6 +59,9 @@ class FixupCreator:
             print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
             return created_commits
         
+        # Store target commits for later rebase suggestion
+        self._target_commits = [target.commit_hash for target in fixup_targets]
+        
         # Create automatic backup before making changes
         if not dry_run and auto_backup:
             self._create_safety_backup()
@@ -176,6 +179,9 @@ class FixupCreator:
                 print(error_msg)
                 continue
         
+        # Store target commits for later rebase suggestion
+        self._target_commits = [fixup_targets[i].commit_hash for i in selected_indices]
+        
         # Stage all changes first
         self.repo.git.add('.')
         
@@ -193,11 +199,18 @@ class FixupCreator:
         if not created_commits:
             return
         
-        # Find the earliest commit that needs to be included in rebase
-        all_targets = self.analyzer.find_fixup_targets()
-        target_commits = [target.commit_hash for target in all_targets]
+        # Use stored target commits from before fixup creation
+        target_commits = getattr(self, '_target_commits', [])
         
         if not target_commits:
+            # Fallback to generic suggestion
+            print()
+            header = Colors.colorize("🚀 To apply the fixup commits, run:", Colors.WHITE, bold=True)
+            print(header)
+            command = Colors.colorize("git rebase -i --autosquash HEAD~<number_of_commits>", Colors.BRIGHT_GREEN, bold=True)
+            print(f"    {command}")
+            hint = Colors.colorize("    (Replace <number_of_commits> with appropriate count)", Colors.DIM)
+            print(hint)
             return
         
         # Find common ancestor or suggest interactive rebase
@@ -210,15 +223,15 @@ class FixupCreator:
             header = Colors.colorize("🚀 To apply the fixup commits, run:", Colors.WHITE, bold=True)
             print(header)
             command = Colors.colorize(f"git rebase -i --autosquash {parent_commit}", Colors.BRIGHT_GREEN, bold=True)
-            print(f"   {command}")
+            print(f"    {command}")
             
         except git.exc.GitCommandError:
             print()
             header = Colors.colorize("🚀 To apply the fixup commits, run:", Colors.WHITE, bold=True)
             print(header)
             command = Colors.colorize("git rebase -i --autosquash HEAD~<number_of_commits>", Colors.BRIGHT_GREEN, bold=True)
-            print(f"   {command}")
-            hint = Colors.colorize("   (Replace <number_of_commits> with appropriate count)", Colors.DIM)
+            print(f"    {command}")
+            hint = Colors.colorize("    (Replace <number_of_commits> with appropriate count)", Colors.DIM)
             print(hint)
     
     def _create_safety_backup(self) -> None:
