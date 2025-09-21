@@ -24,6 +24,10 @@ fastfixupfinder create          # Create fixup commits
 fastfixupfinder create -i       # Interactive mode
 fastfixupfinder create --dry-run # Preview mode
 
+# Testing and demonstration
+./run_demo.sh                   # Interactive demo walkthrough
+cd testcase && ./demo.sh        # Basic demo script
+
 # Testing and linting (when implemented)
 pytest                          # Run tests
 black .                         # Format code

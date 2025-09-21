@@ -141,10 +141,23 @@ git rebase -i --autosquash HEAD~5
 
 The repository includes a complete test case in the `testcase/` directory. See [TESTCASE.md](TESTCASE.md) for details.
 
+### Interactive Demo
+
 ```bash
+# Run the interactive demonstration (recommended)
+./run_demo.sh
+
+# Or run the basic demo in the testcase directory
 cd testcase
-./demo.sh  # Run the demonstration
+./demo.sh
 ```
+
+The interactive demo provides a guided walkthrough with:
+- 🎯 Step-by-step explanations
+- 🔍 Repository exploration
+- 🧪 Live tool demonstration  
+- 💾 Optional fixup commit creation
+- 🎨 Colorized output for better readability
 
 ## Requirements
 
