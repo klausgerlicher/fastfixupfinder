@@ -66,9 +66,11 @@ class FixupGUI:
         self.stdscr = None
         self.changes_win = None
         self.targets_win = None
+        self.preview_win = None
         self.status_win = None
         self.changes_panel = None
         self.targets_panel = None
+        self.preview_panel = None
         
         # Colors
         self.colors = {}
@@ -122,11 +124,14 @@ class FixupGUI:
         # Header (1 line)
         header_height = 1
         
+        # Preview panel (bottom, 6 lines)
+        preview_height = 6
+        
         # Status bar (2 lines)
         status_height = 2
         
         # Main content area
-        content_height = height - header_height - status_height
+        content_height = height - header_height - preview_height - status_height
         content_width = width
         
         # Split content area into two panels
@@ -144,6 +149,12 @@ class FixupGUI:
             header_height, panel_width
         )
         
+        # Preview panel (bottom)
+        self.preview_win = curses.newwin(
+            preview_height, width,
+            header_height + content_height, 0
+        )
+        
         # Status window (bottom)
         self.status_win = curses.newwin(
             status_height, width,
@@ -153,6 +164,7 @@ class FixupGUI:
         # Create panels for layering
         self.changes_panel = curses.panel.new_panel(self.changes_win)
         self.targets_panel = curses.panel.new_panel(self.targets_win)
+        self.preview_panel = curses.panel.new_panel(self.preview_win)
         
         # Enable keypad for special keys
         self.changes_win.keypad(True)
@@ -379,6 +391,85 @@ class FixupGUI:
         
         self.targets_win.refresh()
     
+    def draw_preview_panel(self):
+        """Draw the preview panel showing assignments and commands."""
+        self.preview_win.clear()
+        self.preview_win.box()
+        
+        height, width = self.preview_win.getmaxyx()
+        
+        # Panel title
+        title = "PREVIEW - Selected Assignments & Commands"
+        self.preview_win.addstr(0, 2, f" {title} ", self.colors['header'] | curses.A_BOLD)
+        
+        # Content area
+        content_y = 1
+        y = content_y
+        
+        if not self.state.assignments:
+            self.preview_win.addstr(y + 1, 2, "No assignments selected", self.colors['normal'])
+            self.preview_win.addstr(y + 2, 2, "Press ENTER to assign changes to targets", self.colors['normal'])
+            self.preview_win.refresh()
+            return
+        
+        # Group assignments by target for display
+        target_assignments = {}
+        for assignment in self.state.assignments:
+            if assignment.target_hash not in target_assignments:
+                target_assignments[assignment.target_hash] = []
+            target_assignments[assignment.target_hash].append(assignment.change)
+        
+        # Show assignment summary
+        y += 1
+        assignment_count = len(self.state.assignments)
+        target_count = len(target_assignments)
+        summary = f"📋 {assignment_count} changes assigned to {target_count} targets:"
+        self.preview_win.addstr(y, 2, summary, self.colors['header'])
+        y += 1
+        
+        # Show assignments (limited to fit in panel)
+        max_display = 2  # Max targets to show in preview
+        displayed = 0
+        
+        for target_hash, changes in target_assignments.items():
+            if y >= height - 2 or displayed >= max_display:
+                if len(target_assignments) > max_display:
+                    remaining = len(target_assignments) - max_display
+                    more_text = f"  ... and {remaining} more targets"
+                    self.preview_win.addstr(y, 2, more_text, self.colors['normal'])
+                break
+            
+            # Find target info
+            target = next((t for t in self.targets if t.commit_hash == target_hash), None)
+            if target:
+                short_hash = target_hash[:8]
+                message = target.commit_message[:30] + "..." if len(target.commit_message) > 30 else target.commit_message
+                target_line = f"  • {short_hash}: {message} ({len(changes)} changes)"
+                self.preview_win.addstr(y, 2, target_line[:width-4], self.colors['assigned'])
+                y += 1
+                displayed += 1
+        
+        # Show command preview if assignments exist
+        if y < height - 2:
+            y += 1
+            command_header = "🚀 Commands that will be executed:"
+            self.preview_win.addstr(y, 2, command_header, self.colors['header'])
+            
+            if y + 1 < height - 1:
+                # Show the key commands
+                commands = [
+                    "git add .",
+                    f"git commit -m 'fixup! <target_message>' (×{len(target_assignments)})",
+                    "git rebase -i --autosquash <base_commit>"
+                ]
+                
+                for i, cmd in enumerate(commands):
+                    if y + 1 + i < height - 1:
+                        self.preview_win.addstr(y + 1 + i, 4, f"{i+1}. {cmd}"[:width-6], 
+                                              self.colors['normal'])
+        
+        self.preview_win.refresh()
+    
     def draw_status_bar(self):
         """Draw the status bar with counts and actions."""
         self.status_win.clear()
@@ -576,6 +667,7 @@ class FixupGUI:
                 self.draw_header()
                 self.draw_changes_panel()
                 self.draw_targets_panel()
+                self.draw_preview_panel()
                 self.draw_status_bar()
                 
                 # Update panels

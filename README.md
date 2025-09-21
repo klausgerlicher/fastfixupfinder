@@ -358,6 +358,7 @@ $ fastfixupfinder gui
 - **🖱️ Drag-and-drop assignment** - Move changes from left panel to fixup targets on right
 - **🎨 Color-coded classifications** - Visual indicators for LIKELY/POSSIBLE/UNLIKELY fixups
 - **📋 Real-time assignment tracking** - See assignments as you make them
+- **🔍 Live preview panel** - Shows selected assignments and commands that will be executed
 - **⌨️ Keyboard navigation** - Full keyboard control with intuitive hotkeys
 - **📊 Assignment statistics** - Live counts of assigned/unassigned changes
 
@@ -365,7 +366,7 @@ $ fastfixupfinder gui
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Fast Fixup Finder - Visual Assignment Mode                    [q]uit [h]elp │
-├──────────────────────────────────────────────────────────────────────────────┤
+├──────────────────────────────┬──────────────────────────────────────────────┤
 │ CHANGES (Unassigned)         │ FIXUP TARGETS                                │
 │ ┌─ File: auth.py ──────────┐ │ ┌─ Target: a1b2c3d4 ─────────────────────┐   │
 │ │ ○ + L15: def authenticate │ │ │ Add user authentication feature         │   │
@@ -373,7 +374,16 @@ $ fastfixupfinder gui
 │ │ ● ~ L23: fix typo         │ │ │ 📋 Assigned: auth.py:23, utils.py:45   │   │
 │ │   [LIKELY] 🟢             │ │ └─────────────────────────────────────────┘   │
 │ └──────────────────────────┘ │                                              │
-│ [ENTER] Assign [TAB] Switch  │ [c]reate fixups [r]eset [s]ave session      │
+├──────────────────────────────┴──────────────────────────────────────────────┤
+│ PREVIEW - Selected Assignments & Commands                                   │
+│ 📋 2 changes assigned to 1 targets:                                         │
+│   • a1b2c3d4: Add user authentication... (2 changes)                       │
+│ 🚀 Commands that will be executed:                                          │
+│   1. git add .                                                               │
+│   2. git commit -m 'fixup! <target_message>' (×1)                          │
+│   3. git rebase -i --autosquash <base_commit>                               │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ Status: 3 unassigned, 2 assigned, 1 targets  [c]reate [r]eset [s]ave [q]uit │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
