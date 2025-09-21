@@ -9,6 +9,36 @@ import git
 
 from .git_analyzer import FixupTarget, GitAnalyzer
 
+# Color constants for terminal output
+class Colors:
+    """ANSI color codes for terminal output."""
+    RESET = '\033[0m'
+    BOLD = '\033[1m'
+    DIM = '\033[2m'
+    
+    # Basic colors
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    YELLOW = '\033[33m'
+    BLUE = '\033[34m'
+    MAGENTA = '\033[35m'
+    CYAN = '\033[36m'
+    WHITE = '\033[37m'
+    
+    # Bright colors
+    BRIGHT_RED = '\033[91m'
+    BRIGHT_GREEN = '\033[92m'
+    BRIGHT_YELLOW = '\033[93m'
+    BRIGHT_BLUE = '\033[94m'
+    BRIGHT_MAGENTA = '\033[95m'
+    BRIGHT_CYAN = '\033[96m'
+    
+    @staticmethod
+    def colorize(text: str, color: str, bold: bool = False) -> str:
+        """Apply color and formatting to text."""
+        prefix = Colors.BOLD if bold else ""
+        return f"{prefix}{color}{text}{Colors.RESET}"
+
 
 class FixupCreator:
     """Creates fixup commits automatically."""
@@ -228,28 +258,51 @@ class FixupCreator:
         fixup_targets = self.analyzer.find_fixup_targets()
         
         if not fixup_targets:
-            print("No fixup targets found. Working directory is clean or no blame information available.")
+            print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
+            print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
             return
         
-        print(f"Found {len(fixup_targets)} potential fixup targets:")
+        # Header with emoji and color
+        count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
+        print(f"🎯 Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}:")
         print()
         
-        for target in fixup_targets:
-            short_hash = target.commit_hash[:8]
-            print(f"• {short_hash}: {target.commit_message}")
-            print(f"  Author: {target.author}")
-            print(f"  Files: {', '.join(sorted(target.files))}")
-            print(f"  Changed lines: {len(target.changed_lines)}")
+        for i, target in enumerate(fixup_targets, 1):
+            short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
+            commit_msg = Colors.colorize(target.commit_message, Colors.WHITE, bold=True)
+            print(f"• {short_hash}: {commit_msg}")
             
-            # Show some example changes
+            # Author in dim color
+            author_text = Colors.colorize(f"  👤 Author: {target.author}", Colors.DIM)
+            print(author_text)
+            
+            # Files with emoji and count
+            files_list = ', '.join(sorted(target.files))
+            file_count = len(target.files)
+            files_text = Colors.colorize(f"  📁 File{'s' if file_count != 1 else ''}: {files_list}", Colors.BLUE)
+            print(files_text)
+            
+            # Changed lines with emoji
+            lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
+            print(f"  📝 Changed lines: {lines_count}")
+            
+            # Show some example changes with colored symbols
             if target.changed_lines:
-                print("  Sample changes:")
+                print(Colors.colorize("  📋 Sample changes:", Colors.MAGENTA))
                 for line in target.changed_lines[:3]:  # Show first 3 changes
                     change_type = line.change_type
-                    symbol = "+" if change_type == "added" else "-" if change_type == "deleted" else "~"
-                    print(f"    {symbol} {line.file_path}:{line.line_number}")
+                    if change_type == "added":
+                        symbol = Colors.colorize("+", Colors.BRIGHT_GREEN, bold=True)
+                    elif change_type == "deleted":
+                        symbol = Colors.colorize("-", Colors.BRIGHT_RED, bold=True)
+                    else:  # modified
+                        symbol = Colors.colorize("~", Colors.BRIGHT_YELLOW, bold=True)
+                    
+                    file_line = Colors.colorize(f"{line.file_path}:{line.line_number}", Colors.CYAN)
+                    print(f"    {symbol} {file_line}")
                 
                 if len(target.changed_lines) > 3:
-                    print(f"    ... and {len(target.changed_lines) - 3} more")
+                    more_text = Colors.colorize(f"    ... and {len(target.changed_lines) - 3} more", Colors.DIM)
+                    print(more_text)
             
             print()

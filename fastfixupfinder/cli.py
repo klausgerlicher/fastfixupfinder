@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from .fixup_creator import FixupCreator
+from .fixup_creator import FixupCreator, Colors
 
 
 @click.group()
@@ -62,37 +62,63 @@ def analyze(repo):
         targets = creator.analyzer.find_fixup_targets()
         
         if not targets:
-            click.echo("No fixup targets found.")
+            click.echo(Colors.colorize("🔬 No fixup targets found for detailed analysis.", Colors.YELLOW))
+            click.echo(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
             return
         
-        click.echo(f"Detailed analysis of {len(targets)} fixup targets:")
+        # Header with emoji and color
+        count_text = Colors.colorize(str(len(targets)), Colors.BRIGHT_GREEN, bold=True)
+        header = f"🔬 Detailed analysis of {count_text} fixup target{'s' if len(targets) != 1 else ''}:"
+        click.echo(Colors.colorize(header, Colors.WHITE, bold=True))
         click.echo()
         
         for i, target in enumerate(targets, 1):
-            click.echo(f"{i}. Target Commit: {target.commit_hash}")
-            click.echo(f"   Message: {target.commit_message}")
-            click.echo(f"   Author: {target.author}")
-            click.echo(f"   Affected files: {len(target.files)}")
+            # Target number and commit hash
+            target_num = Colors.colorize(f"{i}.", Colors.BRIGHT_MAGENTA, bold=True)
+            commit_hash = Colors.colorize(target.commit_hash, Colors.BRIGHT_CYAN, bold=True)
+            click.echo(f"{target_num} 🎯 Target Commit: {commit_hash}")
+            
+            # Commit message
+            message = Colors.colorize(f"   💬 Message: {target.commit_message}", Colors.WHITE, bold=True)
+            click.echo(message)
+            
+            # Author
+            author = Colors.colorize(f"   👤 Author: {target.author}", Colors.DIM)
+            click.echo(author)
+            
+            # File count
+            file_count = Colors.colorize(str(len(target.files)), Colors.BRIGHT_YELLOW)
+            click.echo(f"   📁 Affected files: {file_count}")
             
             for file_path in sorted(target.files):
                 file_changes = [line for line in target.changed_lines if line.file_path == file_path]
-                click.echo(f"     {file_path} ({len(file_changes)} changes)")
+                change_count = Colors.colorize(str(len(file_changes)), Colors.BRIGHT_BLUE)
+                file_name = Colors.colorize(file_path, Colors.BLUE, bold=True)
+                click.echo(f"     📄 {file_name} ({change_count} changes)")
                 
                 for change in file_changes[:5]:  # Show first 5 changes per file
-                    change_symbol = {
-                        'added': '+',
-                        'deleted': '-',
-                        'modified': '~'
-                    }.get(change.change_type, '?')
-                    click.echo(f"       {change_symbol} Line {change.line_number}: {change.content[:50]}...")
+                    change_type = change.change_type
+                    if change_type == 'added':
+                        symbol = Colors.colorize("+ ", Colors.BRIGHT_GREEN, bold=True)
+                    elif change_type == 'deleted':
+                        symbol = Colors.colorize("- ", Colors.BRIGHT_RED, bold=True)
+                    else:  # modified
+                        symbol = Colors.colorize("~ ", Colors.BRIGHT_YELLOW, bold=True)
+                    
+                    line_num = Colors.colorize(f"Line {change.line_number}", Colors.CYAN)
+                    content_preview = change.content[:50] + "..." if len(change.content) > 50 else change.content
+                    content = Colors.colorize(content_preview, Colors.WHITE)
+                    click.echo(f"       {symbol}{line_num}: {content}")
                 
                 if len(file_changes) > 5:
-                    click.echo(f"       ... and {len(file_changes) - 5} more changes")
+                    more_text = Colors.colorize(f"       ... and {len(file_changes) - 5} more changes", Colors.DIM)
+                    click.echo(more_text)
             
             click.echo()
             
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        error_msg = Colors.colorize(f"❌ Error: {e}", Colors.BRIGHT_RED)
+        click.echo(error_msg, err=True)
         sys.exit(1)
 
 
