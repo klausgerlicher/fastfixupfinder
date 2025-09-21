@@ -151,6 +151,15 @@ fastfixupfinder status --detailed
 # Show compact one-line output
 fastfixupfinder status --oneline
 
+# Smart filtering (default) - excludes obvious new features
+fastfixupfinder status
+
+# Only show high-confidence fixup targets
+fastfixupfinder status --fixups-only
+
+# Include all changes (no filtering)
+fastfixupfinder status --include-all
+
 # Preview what fixup commits would be created
 fastfixupfinder create --dry-run
 
@@ -165,9 +174,11 @@ fastfixupfinder create
 
 | Command | Description |
 |---------|-------------|
-| `status` | Show potential fixup targets without making changes |
+| `status` | Show potential fixup targets without making changes (smart filtering) |
 | `status --oneline` | Show compact one-line output per target |
-| `status --detailed` | Show detailed analysis of changes and their target commits |
+| `status --detailed` | Show detailed analysis of changes and target commits |
+| `status --fixups-only` | Only show high-confidence fixup targets |
+| `status --include-all` | Include all changes regardless of fixup likelihood |
 | `create` | Create fixup commits for identified targets |
 | `create --dry-run` | Preview what would be created without making changes |
 | `create --interactive` | Interactively select which targets to create fixups for |
@@ -223,6 +234,38 @@ e5f6g7h8 Fix validation logic (1 files, 2 lines)
 - **`status`** - Quick check before creating fixups, get overview of targets
 - **`status --oneline`** - Even more compact output for scripts or quick scans
 - **`status --detailed`** - Detailed review of exact changes, verify detection accuracy
+
+## 🧠 Intelligent Filtering
+
+Fast Fixup Finder uses smart heuristics to distinguish between actual fixups and new feature development:
+
+### **Smart Classification**
+- **Likely Fixups**: Typos, comments, small fixes, string changes
+- **Possible Fixups**: Could be either fixups or small features  
+- **Unlikely Fixups**: Large changes, new functions, complex logic
+- **New Files**: Completely new files (filtered by default)
+
+### **Filtering Modes**
+- **Smart Default** (default): Excludes obvious new features, includes likely fixups
+- **Fixups Only** (`--fixups-only`): Strict mode, only high-confidence fixups
+- **Include All** (`--include-all`): No filtering, show everything for manual review
+
+### **Example Classifications**
+```bash
+# These would be classified as LIKELY_FIXUP:
+"fix typo in comment"
+"update error message"  
+'logging' → 'logger'
+
+# These would be classified as UNLIKELY_FIXUP:
+def new_function():
+import pandas as pd
+class NewFeature:
+
+# These would be filtered out by default:
+new_module.py (NEW_FILE)
+Large architectural changes
+```
 
 ## 🛡️ Safety Features
 
@@ -341,6 +384,8 @@ This tool is particularly useful when:
 ### Status Command Options
 - `--oneline` - Show compact one-line output per target
 - `--detailed` - Show detailed analysis of changes and target commits
+- `--fixups-only` - Only show high-confidence fixup targets
+- `--include-all` - Include all changes regardless of fixup likelihood
 
 ### Create Command Options
 - `--dry-run` - Show what would be done without making changes
