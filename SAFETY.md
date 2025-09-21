@@ -177,7 +177,15 @@ If you encounter issues:
 1. **Check this safety guide** for recovery procedures
 2. **Review git reflog** to understand what happened
 3. **Use git stash/backup recovery** methods above
-4. **Report bugs** to the project repository with details
-5. **Ask for help** with specific git commands if needed
+4. **Check command availability** - If `fastfixupfinder` command not found:
+   ```bash
+   # Use module syntax as fallback
+   python3 -m fastfixupfinder.cli restore
+   
+   # Or check PATH configuration (see README.md)
+   echo $PATH | grep -q "$(python3 -m site --user-base)/bin" || echo "PATH needs user bin directory"
+   ```
+5. **Report bugs** to the project repository with details
+6. **Ask for help** with specific git commands if needed
 
 Remember: Git is designed to be safe, and most operations are recoverable with the right knowledge!
