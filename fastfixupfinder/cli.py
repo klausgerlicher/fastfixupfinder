@@ -181,6 +181,22 @@ def restore(repo, backup_name):
 
 
 @main.command()
+@click.option('--repo', default='.', help='Path to git repository (default: current directory)')
+def gui(repo):
+    """Launch visual GUI for drag-and-drop fixup assignment."""
+    try:
+        from .gui import FixupGUI
+        gui_app = FixupGUI(repo)
+        gui_app.run()
+    except ImportError:
+        click.echo(Colors.colorize("❌ Error: GUI requires ncurses support", Colors.BRIGHT_RED), err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(Colors.colorize(f"❌ Error: {e}", Colors.BRIGHT_RED), err=True)
+        sys.exit(1)
+
+
+@main.command()
 def help_usage():
     """Show usage examples and workflow guidance."""
     help_text = """
@@ -204,7 +220,10 @@ Fast Fixup Finder Usage Examples:
 6. Use compact output in interactive mode (for many changes):
    fastfixupfinder create --interactive --oneline
 
-7. Automatically create all fixup commits:
+7. Launch visual GUI for drag-and-drop assignment:
+   fastfixupfinder gui
+
+8. Automatically create all fixup commits:
    fastfixupfinder create
 
 Typical Workflow:

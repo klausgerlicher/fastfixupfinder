@@ -169,6 +169,9 @@ fastfixupfinder create --interactive
 # Use compact output in interactive mode (for many changes)
 fastfixupfinder create --interactive --oneline
 
+# Launch visual GUI for drag-and-drop assignment
+fastfixupfinder gui
+
 # Create all fixup commits automatically
 fastfixupfinder create
 ```
@@ -186,6 +189,7 @@ fastfixupfinder create
 | `create --dry-run` | Preview what would be created without making changes |
 | `create --interactive` | Interactively select targets with line-level classification control |
 | `create --interactive --oneline` | Use compact output in interactive mode for better readability |
+| `gui` | Launch visual ncurses GUI for drag-and-drop fixup assignment |
 | `create --no-backup` | Skip automatic safety backup (not recommended) |
 | `restore` | Restore from automatic safety backup |
 | `help-usage` | Show detailed usage examples and workflow guidance |
@@ -329,6 +333,50 @@ Found 2 potential fixup targets:
 ✅ Final selection: 2 lines across 1 files
 ```
 
+## 🎨 Visual GUI Mode
+
+For the ultimate user experience, Fast Fixup Finder includes a visual ncurses-based GUI:
+
+```bash
+# Launch the visual interface
+$ fastfixupfinder gui
+```
+
+### **GUI Features**
+- **🖱️ Drag-and-drop assignment** - Move changes from left panel to fixup targets on right
+- **🎨 Color-coded classifications** - Visual indicators for LIKELY/POSSIBLE/UNLIKELY fixups
+- **📋 Real-time assignment tracking** - See assignments as you make them
+- **⌨️ Keyboard navigation** - Full keyboard control with intuitive hotkeys
+- **📊 Assignment statistics** - Live counts of assigned/unassigned changes
+
+### **GUI Layout**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Fast Fixup Finder - Visual Assignment Mode                    [q]uit [h]elp │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ CHANGES (Unassigned)         │ FIXUP TARGETS                                │
+│ ┌─ File: auth.py ──────────┐ │ ┌─ Target: a1b2c3d4 ─────────────────────┐   │
+│ │ ○ + L15: def authenticate │ │ │ Add user authentication feature         │   │
+│ │   [UNLIKELY] 🔴           │ │ │ Author: John Doe                        │   │
+│ │ ● ~ L23: fix typo         │ │ │ 📋 Assigned: auth.py:23, utils.py:45   │   │
+│ │   [LIKELY] 🟢             │ │ └─────────────────────────────────────────┘   │
+│ └──────────────────────────┘ │                                              │
+│ [ENTER] Assign [TAB] Switch  │ [c]reate fixups [r]eset [s]ave session      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### **Keyboard Shortcuts**
+- `TAB` - Switch between changes and targets panels
+- `↑↓` - Navigate within panels
+- `ENTER` - Assign selected change to selected target
+- `SPACE` - Quick-assign to suggested target
+- `DEL` - Remove assignment
+- `c` - Create fixup commits from assignments
+- `r` - Reset all assignments
+- `q` - Quit GUI
+
+The GUI provides an intuitive visual workflow that makes managing complex fixup assignments effortless!
+
 **Compact Mode (for many changes):**
 ```bash
 $ fastfixupfinder create --interactive --oneline
@@ -362,6 +410,7 @@ Fast Fixup Finder includes built-in safety features:
 - **Automatic backups** - Creates git stash before making changes
 - **Dry-run mode** - Preview changes without modifying repository  
 - **Interactive selection** - Choose exactly which fixups to create
+- **Visual GUI mode** - Drag-and-drop interface for intuitive assignment
 - **Backup restoration** - Easy recovery from automatic backups
 
 See [SAFETY.md](SAFETY.md) for comprehensive safety strategies and emergency recovery procedures.
