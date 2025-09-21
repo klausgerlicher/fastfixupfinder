@@ -75,6 +75,11 @@ pip install .
 pip install --user .
 ```
 
+**What this does:**
+- Installs the package to your user Python directory (`~/.local/lib/python3.x/site-packages/`)
+- Creates executable script at `~/.local/bin/fastfixupfinder`
+- The script allows you to run `fastfixupfinder` from anywhere (if PATH is configured)
+
 **Automatic PATH Configuration:**
 
 Run the automatic setup script to configure your PATH:
@@ -91,9 +96,10 @@ python3 setup_path.py
 ```
 
 The setup script will:
-- ✅ Detect your user binary installation path
+- ✅ Detect your user binary installation path (`~/.local/bin`)
 - ✅ Check if PATH is already configured  
-- ✅ Add PATH to appropriate shell config file (.bashrc, .zshrc, etc.)
+- ✅ Add `~/.local/bin` to your shell's PATH (.bashrc, .zshrc, etc.)
+- ✅ Fix executable permissions if needed (`chmod +x ~/.local/bin/fastfixupfinder`)
 - ✅ Provide manual instructions as fallback
 - ✅ Test the installation
 
@@ -115,12 +121,20 @@ export PATH="$PATH:$(python3 -m site --user-base)/bin"
 # After setup and restarting terminal
 fastfixupfinder --version
 
+# Check the installed script (should show executable file)
+ls -la ~/.local/bin/fastfixupfinder
+
 # If permission denied error, fix permissions:
 ./fix_permissions.sh
 
 # If command not found, use module syntax as fallback
 python3 -m fastfixupfinder.cli --help
 ```
+
+**Understanding the installation:**
+- The `fastfixupfinder` script is a Python entry point that calls `fastfixupfinder.cli:main`
+- It's installed to `~/.local/bin/` which needs to be in your PATH
+- The script is essentially equivalent to running `python3 -m fastfixupfinder.cli`
 
 ### Basic Usage
 
