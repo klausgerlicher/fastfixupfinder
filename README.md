@@ -12,6 +12,29 @@ When you edit files in a project, those changes often touch lines that were crea
 4. **Creates** appropriately named fixup commits
 5. **Suggests** the rebase command to apply them
 
+## Prerequisites
+
+Before installing Fast Fixup Finder, ensure you have:
+
+### System Requirements
+- **Python 3.10 or higher** - Check with `python3 --version`
+- **Git** - Check with `git --version`
+- **pip** - Modern version recommended, upgrade with `pip install --upgrade pip`
+
+### Repository Requirements
+- **Git repository** with existing commits and history
+- **Uncommitted changes** in your working directory to analyze
+- **Write access** to the repository for creating commits
+
+### Quick Check
+```bash
+# Verify prerequisites
+python3 --version  # Should show 3.10+
+git --version      # Should show git version
+pip --version      # Upgrade if old: pip install --upgrade pip
+git status         # Should show you're in a git repository
+```
+
 ## Quick Start
 
 ### Installation
@@ -219,11 +242,6 @@ The interactive demo provides a guided walkthrough with:
 - 💾 Optional fixup commit creation
 - 🎨 Colorized output for better readability
 
-## Requirements
-
-- **Python 3.10+**
-- **Git repository** with existing commits
-- **GitPython library** (automatically installed)
 
 ## How it works
 
