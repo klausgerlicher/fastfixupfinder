@@ -52,6 +52,50 @@ pip install .
 pip install --user .
 ```
 
+**Automatic PATH Configuration:**
+
+Run the automatic setup script to configure your PATH:
+
+```bash
+# Linux/macOS
+./setup_path.sh
+
+# Windows (run in Command Prompt or PowerShell)
+setup_path.bat
+
+# Or run directly with Python (all platforms)
+python3 setup_path.py
+```
+
+The setup script will:
+- ✅ Detect your user binary installation path
+- ✅ Check if PATH is already configured  
+- ✅ Add PATH to appropriate shell config file (.bashrc, .zshrc, etc.)
+- ✅ Provide manual instructions as fallback
+- ✅ Test the installation
+
+**Manual PATH Configuration (if automatic setup fails):**
+
+```bash
+# Check where pip installed the binary
+python3 -m site --user-base
+
+# Add to PATH (Linux/macOS - add to ~/.bashrc, ~/.zshrc, or ~/.profile)
+export PATH="$PATH:$(python3 -m site --user-base)/bin"
+
+# Windows: Add to environment variables
+# %APPDATA%\Python\Python3x\Scripts
+```
+
+**Verify installation:**
+```bash
+# After setup and restarting terminal
+fastfixupfinder --version
+
+# If command not found, use module syntax as fallback
+python3 -m fastfixupfinder.cli --help
+```
+
 ### Basic Usage
 
 ```bash
@@ -212,9 +256,41 @@ This tool is particularly useful when:
 ### Common Issues
 
 1. **"No fixup targets found"** - Ensure you have uncommitted changes and the files have git history
-2. **Module not found** - Run with `PYTHONPATH=. python -m fastfixupfinder.cli` if not installed, or activate your virtual environment
-3. **Permission errors** - Ensure you have write access to the git repository
-4. **Command not found after installation** - Make sure your virtual environment is activated or the installation path is in your PATH
+
+2. **"fastfixupfinder: command not found"** - PATH configuration needed:
+   ```bash
+   # Find user installation path
+   python3 -m site --user-base
+   
+   # Add to your shell profile (~/.bashrc, ~/.zshrc, ~/.profile)
+   export PATH="$PATH:$(python3 -m site --user-base)/bin"
+   
+   # Reload shell or restart terminal
+   source ~/.bashrc  # or ~/.zshrc
+   
+   # Alternative: use module syntax
+   python3 -m fastfixupfinder.cli status
+   ```
+
+3. **Module not found** - Installation or environment issue:
+   ```bash
+   # Check if installed
+   pip list | grep fastfixupfinder
+   
+   # Reinstall if needed
+   pip install --user .
+   
+   # Or use development mode
+   PYTHONPATH=. python3 -m fastfixupfinder.cli
+   ```
+
+4. **Permission errors** - Ensure you have write access to the git repository
+
+5. **Virtual environment issues** - Make sure your virtual environment is activated:
+   ```bash
+   source venv/bin/activate  # Linux/macOS
+   venv\Scripts\activate     # Windows
+   ```
 
 ### Debug Mode
 

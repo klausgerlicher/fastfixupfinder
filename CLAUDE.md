@@ -17,6 +17,11 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install in development mode
 pip install -e .
 
+# For user installation PATH setup
+python3 setup_path.py        # Automatic PATH configuration
+./setup_path.sh              # Unix/Linux script
+setup_path.bat               # Windows script
+
 # Run the tool
 fastfixupfinder status          # Show potential fixup targets
 fastfixupfinder analyze         # Detailed analysis
@@ -68,3 +73,7 @@ mypy .                          # Type checking
 - Interactive selection of fixup targets
 - Dry-run mode for safe preview
 - Automatic rebase command suggestion
+
+## Best Practices
+
+- Always ask me before a push
