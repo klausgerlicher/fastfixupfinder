@@ -18,14 +18,92 @@ def main():
 @main.command()
 @click.option('--repo', default='.', help='Path to git repository (default: current directory)')
 @click.option('--oneline', is_flag=True, help='Show compact one-line output per target')
-def status(repo, oneline):
+@click.option('--detailed', is_flag=True, help='Show detailed analysis of changes and target commits')
+def status(repo, oneline, detailed):
     """Show current fixup targets without making any changes."""
     try:
         creator = FixupCreator(repo)
-        if oneline:
-            creator.status_oneline()
+        targets = creator.analyzer.find_fixup_targets()
+        
+        if not targets:
+            if oneline:
+                click.echo(Colors.colorize("No fixup targets found.", Colors.YELLOW))
+            else:
+                click.echo(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
+                click.echo(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
+            return
+        
+        if detailed:
+            # Detailed analysis (former analyze command)
+            if oneline:
+                # Simple header for oneline mode
+                count_text = Colors.colorize(str(len(targets)), Colors.BRIGHT_GREEN, bold=True)
+                click.echo(f"Found {count_text} fixup targets:")
+            else:
+                # Header with emoji and color
+                count_text = Colors.colorize(str(len(targets)), Colors.BRIGHT_GREEN, bold=True)
+                header = f"🔬 Detailed analysis of {count_text} fixup target{'s' if len(targets) != 1 else ''}:"
+                click.echo(Colors.colorize(header, Colors.WHITE, bold=True))
+                click.echo()
+            
+            for i, target in enumerate(targets, 1):
+                if oneline:
+                    # Compact one-line format
+                    short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
+                    files_count = Colors.colorize(str(len(target.files)), Colors.BRIGHT_BLUE)
+                    lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
+                    message = target.commit_message[:60] + "..." if len(target.commit_message) > 60 else target.commit_message
+                    click.echo(f"{short_hash} {message} ({files_count} files, {lines_count} lines)")
+                else:
+                    # Full detailed format
+                    target_num = Colors.colorize(f"{i}.", Colors.BRIGHT_MAGENTA, bold=True)
+                    commit_hash = Colors.colorize(target.commit_hash, Colors.BRIGHT_CYAN, bold=True)
+                    click.echo(f"{target_num} 🎯 Target Commit: {commit_hash}")
+                    
+                    # Commit message
+                    message = Colors.colorize(f"   💬 Message: {target.commit_message}", Colors.WHITE, bold=True)
+                    click.echo(message)
+                    
+                    # Author
+                    author = Colors.colorize(f"   👤 Author: {target.author}", Colors.DIM)
+                    click.echo(author)
+                    
+                    # File count
+                    file_count = Colors.colorize(str(len(target.files)), Colors.BRIGHT_YELLOW)
+                    click.echo(f"   📁 Affected files: {file_count}")
+                    
+                    for file_path in sorted(target.files):
+                        file_changes = [line for line in target.changed_lines if line.file_path == file_path]
+                        change_count = Colors.colorize(str(len(file_changes)), Colors.BRIGHT_BLUE)
+                        file_name = Colors.colorize(file_path, Colors.BLUE, bold=True)
+                        click.echo(f"     📄 {file_name} ({change_count} changes)")
+                        
+                        for change in file_changes[:5]:  # Show first 5 changes per file
+                            change_type = change.change_type
+                            if change_type == 'added':
+                                symbol = Colors.colorize("+ ", Colors.BRIGHT_GREEN, bold=True)
+                            elif change_type == 'deleted':
+                                symbol = Colors.colorize("- ", Colors.BRIGHT_RED, bold=True)
+                            else:  # modified
+                                symbol = Colors.colorize("~ ", Colors.BRIGHT_YELLOW, bold=True)
+                            
+                            line_num = Colors.colorize(f"Line {change.line_number}", Colors.CYAN)
+                            content_preview = change.content[:50] + "..." if len(change.content) > 50 else change.content
+                            content = Colors.colorize(content_preview, Colors.WHITE)
+                            click.echo(f"       {symbol}{line_num}: {content}")
+                        
+                        if len(file_changes) > 5:
+                            more_text = Colors.colorize(f"       ... and {len(file_changes) - 5} more changes", Colors.DIM)
+                            click.echo(more_text)
+                    
+                    click.echo()
         else:
-            creator.status()
+            # Brief status (original status command)
+            if oneline:
+                creator.status_oneline()
+            else:
+                creator.status()
+            
     except Exception as e:
         error_msg = Colors.colorize(f"❌ Error: {e}", Colors.BRIGHT_RED)
         click.echo(error_msg, err=True)
@@ -63,91 +141,6 @@ def create(repo, dry_run, interactive, no_backup):
         sys.exit(1)
 
 
-@main.command()
-@click.option('--repo', default='.', help='Path to git repository (default: current directory)')
-@click.option('--oneline', is_flag=True, help='Show compact one-line output per target')
-def analyze(repo, oneline):
-    """Analyze the repository and show detailed fixup target information."""
-    try:
-        creator = FixupCreator(repo)
-        targets = creator.analyzer.find_fixup_targets()
-        
-        if not targets:
-            if oneline:
-                click.echo(Colors.colorize("No fixup targets found.", Colors.YELLOW))
-            else:
-                click.echo(Colors.colorize("🔬 No fixup targets found for detailed analysis.", Colors.YELLOW))
-                click.echo(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
-            return
-        
-        if oneline:
-            # Simple header for oneline mode
-            count_text = Colors.colorize(str(len(targets)), Colors.BRIGHT_GREEN, bold=True)
-            click.echo(f"Found {count_text} fixup targets:")
-        else:
-            # Header with emoji and color
-            count_text = Colors.colorize(str(len(targets)), Colors.BRIGHT_GREEN, bold=True)
-            header = f"🔬 Detailed analysis of {count_text} fixup target{'s' if len(targets) != 1 else ''}:"
-            click.echo(Colors.colorize(header, Colors.WHITE, bold=True))
-            click.echo()
-        
-        for i, target in enumerate(targets, 1):
-            if oneline:
-                # Compact one-line format
-                short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
-                files_count = Colors.colorize(str(len(target.files)), Colors.BRIGHT_BLUE)
-                lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
-                message = target.commit_message[:60] + "..." if len(target.commit_message) > 60 else target.commit_message
-                click.echo(f"{short_hash} {message} ({files_count} files, {lines_count} lines)")
-            else:
-                # Full detailed format
-                target_num = Colors.colorize(f"{i}.", Colors.BRIGHT_MAGENTA, bold=True)
-                commit_hash = Colors.colorize(target.commit_hash, Colors.BRIGHT_CYAN, bold=True)
-                click.echo(f"{target_num} 🎯 Target Commit: {commit_hash}")
-                
-                # Commit message
-                message = Colors.colorize(f"   💬 Message: {target.commit_message}", Colors.WHITE, bold=True)
-                click.echo(message)
-                
-                # Author
-                author = Colors.colorize(f"   👤 Author: {target.author}", Colors.DIM)
-                click.echo(author)
-                
-                # File count
-                file_count = Colors.colorize(str(len(target.files)), Colors.BRIGHT_YELLOW)
-                click.echo(f"   📁 Affected files: {file_count}")
-                
-                for file_path in sorted(target.files):
-                    file_changes = [line for line in target.changed_lines if line.file_path == file_path]
-                    change_count = Colors.colorize(str(len(file_changes)), Colors.BRIGHT_BLUE)
-                    file_name = Colors.colorize(file_path, Colors.BLUE, bold=True)
-                    click.echo(f"     📄 {file_name} ({change_count} changes)")
-                    
-                    for change in file_changes[:5]:  # Show first 5 changes per file
-                        change_type = change.change_type
-                        if change_type == 'added':
-                            symbol = Colors.colorize("+ ", Colors.BRIGHT_GREEN, bold=True)
-                        elif change_type == 'deleted':
-                            symbol = Colors.colorize("- ", Colors.BRIGHT_RED, bold=True)
-                        else:  # modified
-                            symbol = Colors.colorize("~ ", Colors.BRIGHT_YELLOW, bold=True)
-                        
-                        line_num = Colors.colorize(f"Line {change.line_number}", Colors.CYAN)
-                        content_preview = change.content[:50] + "..." if len(change.content) > 50 else change.content
-                        content = Colors.colorize(content_preview, Colors.WHITE)
-                        click.echo(f"       {symbol}{line_num}: {content}")
-                    
-                    if len(file_changes) > 5:
-                        more_text = Colors.colorize(f"       ... and {len(file_changes) - 5} more changes", Colors.DIM)
-                        click.echo(more_text)
-                
-                click.echo()
-            
-    except Exception as e:
-        error_msg = Colors.colorize(f"❌ Error: {e}", Colors.BRIGHT_RED)
-        click.echo(error_msg, err=True)
-        sys.exit(1)
-
 
 @main.command()
 @click.option('--repo', default='.', help='Path to git repository (default: current directory)')
@@ -181,23 +174,27 @@ Fast Fixup Finder Usage Examples:
 1. Check what fixup targets are available:
    fastfixupfinder status
 
-2. See detailed analysis of potential targets:
-   fastfixupfinder analyze
+2. Show compact one-line format:
+   fastfixupfinder status --oneline
 
-3. Preview what fixup commits would be created:
+3. See detailed analysis of potential targets:
+   fastfixupfinder status --detailed
+
+4. Preview what fixup commits would be created:
    fastfixupfinder create --dry-run
 
-4. Interactively select and create fixup commits:
+5. Interactively select and create fixup commits:
    fastfixupfinder create --interactive
 
-5. Automatically create all fixup commits:
+6. Automatically create all fixup commits:
    fastfixupfinder create
 
 Typical Workflow:
 1. Make changes to your files
 2. Run 'fastfixupfinder status' to see potential targets
-3. Run 'fastfixupfinder create --interactive' to selectively create fixups
-4. Use the suggested 'git rebase -i --autosquash' command to apply fixups
+3. Run 'fastfixupfinder status --detailed' for in-depth analysis
+4. Run 'fastfixupfinder create --interactive' to selectively create fixups
+5. Use the suggested 'git rebase -i --autosquash' command to apply fixups
 
 The tool works by:
 - Analyzing your current changes (staged and unstaged)
