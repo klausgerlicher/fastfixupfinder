@@ -46,6 +46,9 @@ git status         # Should show you're in a git repository
 git clone https://github.com/kgerlich/fastfixupfinder.git
 cd fastfixupfinder
 
+# Initialize the testcase submodule (for demo)
+git submodule update --init --recursive
+
 # Create and activate virtual environment
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
