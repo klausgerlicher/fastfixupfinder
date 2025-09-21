@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
+import difflib
 
 import git
 
@@ -56,7 +57,10 @@ class GitAnalyzer:
         diff = self.repo.git.diff('--cached', unified=0)
         changed_lines.extend(self._parse_diff(diff, 'staged'))
         
-        return changed_lines
+        # Post-process to detect delete/add pairs as modifications
+        enhanced_lines = self._enhance_change_detection(changed_lines)
+        
+        return enhanced_lines
     
     def _parse_diff(self, diff_output: str, change_source: str) -> List[ChangedLine]:
         """Parse git diff output to extract changed lines."""
@@ -104,6 +108,94 @@ class GitAnalyzer:
                 new_line_num += 1
         
         return changed_lines
+    
+    def _enhance_change_detection(self, changed_lines: List[ChangedLine]) -> List[ChangedLine]:
+        """Enhance change detection by pairing similar delete/add operations as modifications."""
+        # Group lines by file and line numbers that are close to each other
+        file_groups = {}
+        for line in changed_lines:
+            if line.file_path not in file_groups:
+                file_groups[line.file_path] = []
+            file_groups[line.file_path].append(line)
+        
+        enhanced_lines = []
+        
+        for file_path, lines in file_groups.items():
+            # Separate deleted and added lines
+            deleted_lines = [l for l in lines if l.change_type == 'deleted']
+            added_lines = [l for l in lines if l.change_type == 'added']
+            other_lines = [l for l in lines if l.change_type not in ['deleted', 'added']]
+            
+            # Keep track of which lines we've paired
+            used_deleted = set()
+            used_added = set()
+            
+            # Try to pair deleted and added lines that are similar
+            for del_line in deleted_lines:
+                if del_line in used_deleted:
+                    continue
+                    
+                best_match = None
+                best_similarity = 0.0
+                
+                for add_line in added_lines:
+                    if add_line in used_added:
+                        continue
+                    
+                    # Check if lines are close in location (within ~5 lines)
+                    line_distance = abs(add_line.line_number - del_line.line_number)
+                    if line_distance > 5:
+                        continue
+                    
+                    # Calculate content similarity
+                    similarity = self._calculate_similarity(del_line.content, add_line.content)
+                    
+                    # Consider it a match if similarity > 60% and they're close
+                    if similarity > 0.6 and similarity > best_similarity:
+                        best_match = add_line
+                        best_similarity = similarity
+                
+                if best_match:
+                    # Create a modified line using the deleted line's position for blame
+                    modified_line = ChangedLine(
+                        file_path=del_line.file_path,
+                        line_number=del_line.line_number,  # Use original line number for blame
+                        content=best_match.content,        # New content
+                        change_type='modified'             # Mark as modification
+                    )
+                    enhanced_lines.append(modified_line)
+                    used_deleted.add(del_line)
+                    used_added.add(best_match)
+                else:
+                    # No match found, keep as deleted
+                    enhanced_lines.append(del_line)
+            
+            # Add remaining unmatched lines
+            for del_line in deleted_lines:
+                if del_line not in used_deleted:
+                    enhanced_lines.append(del_line)
+            
+            for add_line in added_lines:
+                if add_line not in used_added:
+                    enhanced_lines.append(add_line)
+            
+            # Add other line types unchanged
+            enhanced_lines.extend(other_lines)
+        
+        return enhanced_lines
+    
+    def _calculate_similarity(self, str1: str, str2: str) -> float:
+        """Calculate similarity between two strings using difflib."""
+        # Remove leading/trailing whitespace for comparison
+        str1 = str1.strip()
+        str2 = str2.strip()
+        
+        if not str1 or not str2:
+            return 0.0
+        
+        # Use difflib's SequenceMatcher to calculate similarity
+        matcher = difflib.SequenceMatcher(None, str1, str2)
+        return matcher.ratio()
     
     def get_blame_info(self, file_path: str, line_number: int) -> Optional[BlameInfo]:
         """Get blame information for a specific line."""
