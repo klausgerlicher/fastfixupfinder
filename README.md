@@ -80,7 +80,20 @@ fastfixupfinder create
 | `create` | Create fixup commits for identified targets |
 | `create --dry-run` | Preview what would be created without making changes |
 | `create --interactive` | Interactively select which targets to create fixups for |
+| `create --no-backup` | Skip automatic safety backup (not recommended) |
+| `restore` | Restore from automatic safety backup |
 | `help-usage` | Show detailed usage examples and workflow guidance |
+
+## 🛡️ Safety Features
+
+Fast Fixup Finder includes built-in safety features:
+
+- **Automatic backups** - Creates git stash before making changes
+- **Dry-run mode** - Preview changes without modifying repository  
+- **Interactive selection** - Choose exactly which fixups to create
+- **Backup restoration** - Easy recovery from automatic backups
+
+See [SAFETY.md](SAFETY.md) for comprehensive safety strategies and emergency recovery procedures.
 
 ## Typical Workflow
 

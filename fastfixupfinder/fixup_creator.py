@@ -19,7 +19,7 @@ class FixupCreator:
         self.repo_path = Path(repo_path)
         self.analyzer = GitAnalyzer(repo_path)
     
-    def create_fixup_commits(self, dry_run: bool = False) -> List[str]:
+    def create_fixup_commits(self, dry_run: bool = False, auto_backup: bool = True) -> List[str]:
         """Create fixup commits for all identified targets."""
         fixup_targets = self.analyzer.find_fixup_targets()
         created_commits = []
@@ -27,6 +27,10 @@ class FixupCreator:
         if not fixup_targets:
             print("No fixup targets found.")
             return created_commits
+        
+        # Create automatic backup before making changes
+        if not dry_run and auto_backup:
+            self._create_safety_backup()
         
         # Stage all changes first
         self.repo.git.add('.')
@@ -152,6 +156,72 @@ class FixupCreator:
             print()
             print("To apply the fixup commits, run:")
             print("git rebase -i --autosquash HEAD~<number_of_commits>")
+    
+    def _create_safety_backup(self) -> None:
+        """Create automatic safety backup before making changes."""
+        try:
+            # Create a stash with timestamp
+            timestamp = subprocess.run(
+                ["date", "+%Y%m%d_%H%M%S"], 
+                capture_output=True, 
+                text=True
+            ).stdout.strip()
+            
+            stash_message = f"fastfixupfinder_backup_{timestamp}"
+            
+            # Check if there are changes to stash
+            status_output = self.repo.git.status("--porcelain")
+            if status_output.strip():
+                self.repo.git.stash("push", "-m", stash_message)
+                print(f"🛡️  Safety backup created: {stash_message}")
+                print("   To restore if needed: git stash list && git stash pop")
+            else:
+                print("ℹ️  No changes to backup")
+                
+        except Exception as e:
+            print(f"⚠️  Warning: Could not create safety backup: {e}")
+            print("   Consider creating manual backup before proceeding")
+    
+    def restore_from_backup(self, backup_name: Optional[str] = None) -> bool:
+        """Restore from a safety backup."""
+        try:
+            if backup_name:
+                # Restore specific backup
+                self.repo.git.stash("apply", backup_name)
+            else:
+                # List available backups
+                stashes = self.repo.git.stash("list").split('\n')
+                fastfixup_stashes = [s for s in stashes if 'fastfixupfinder_backup' in s]
+                
+                if not fastfixup_stashes:
+                    print("No fastfixupfinder backups found")
+                    return False
+                
+                print("Available backups:")
+                for i, stash in enumerate(fastfixup_stashes[:5]):  # Show last 5
+                    print(f"  {i}: {stash}")
+                
+                choice = input("Enter backup number to restore (or 'cancel'): ")
+                if choice.lower() == 'cancel':
+                    return False
+                
+                try:
+                    idx = int(choice)
+                    if 0 <= idx < len(fastfixup_stashes):
+                        stash_ref = fastfixup_stashes[idx].split(':')[0]
+                        self.repo.git.stash("apply", stash_ref)
+                        print(f"✓ Restored backup: {fastfixup_stashes[idx]}")
+                        return True
+                    else:
+                        print("Invalid selection")
+                        return False
+                except ValueError:
+                    print("Invalid input")
+                    return False
+                    
+        except Exception as e:
+            print(f"Error restoring backup: {e}")
+            return False
     
     def status(self) -> None:
         """Show current status of potential fixup targets."""

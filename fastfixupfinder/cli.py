@@ -31,7 +31,8 @@ def status(repo):
 @click.option('--repo', default='.', help='Path to git repository (default: current directory)')
 @click.option('--dry-run', is_flag=True, help='Show what would be done without making changes')
 @click.option('--interactive', '-i', is_flag=True, help='Interactively select targets')
-def create(repo, dry_run, interactive):
+@click.option('--no-backup', is_flag=True, help='Skip automatic safety backup')
+def create(repo, dry_run, interactive, no_backup):
     """Create fixup commits for identified targets."""
     try:
         creator = FixupCreator(repo)
@@ -39,7 +40,7 @@ def create(repo, dry_run, interactive):
         if interactive:
             created_commits = creator.interactive_fixup_selection()
         else:
-            created_commits = creator.create_fixup_commits(dry_run)
+            created_commits = creator.create_fixup_commits(dry_run, auto_backup=not no_backup)
         
         if created_commits and not dry_run:
             click.echo(f"Created {len(created_commits)} fixup commits.")
@@ -89,6 +90,26 @@ def analyze(repo):
                     click.echo(f"       ... and {len(file_changes) - 5} more changes")
             
             click.echo()
+            
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@main.command()
+@click.option('--repo', default='.', help='Path to git repository (default: current directory)')
+@click.option('--backup-name', help='Specific backup name to restore')
+def restore(repo, backup_name):
+    """Restore from a safety backup created by fastfixupfinder."""
+    try:
+        creator = FixupCreator(repo)
+        success = creator.restore_from_backup(backup_name)
+        
+        if success:
+            click.echo("✓ Backup restored successfully")
+        else:
+            click.echo("✗ Failed to restore backup")
+            sys.exit(1)
             
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
