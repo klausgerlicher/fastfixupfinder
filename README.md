@@ -163,7 +163,7 @@ fastfixupfinder status --include-all
 # Preview what fixup commits would be created
 fastfixupfinder create --dry-run
 
-# Interactively select which fixups to create
+# Interactively select which fixups to create with line-level control
 fastfixupfinder create --interactive
 
 # Create all fixup commits automatically
@@ -181,7 +181,7 @@ fastfixupfinder create
 | `status --include-all` | Include all changes regardless of fixup likelihood |
 | `create` | Create fixup commits for identified targets |
 | `create --dry-run` | Preview what would be created without making changes |
-| `create --interactive` | Interactively select which targets to create fixups for |
+| `create --interactive` | Interactively select targets with line-level classification control |
 | `create --no-backup` | Skip automatic safety backup (not recommended) |
 | `restore` | Restore from automatic safety backup |
 | `help-usage` | Show detailed usage examples and workflow guidance |
@@ -265,6 +265,62 @@ class NewFeature:
 # These would be filtered out by default:
 new_module.py (NEW_FILE)
 Large architectural changes
+```
+
+## 🧠 Enhanced Interactive Mode
+
+The interactive mode (`--interactive`) now provides line-level classification control:
+
+### **Line-Level Selection**
+- **Visual Classification**: Each line shows its automatic classification with color coding
+  - 🟢 **LIKELY_FIXUP** (green) - Typos, comments, small fixes
+  - 🟡 **POSSIBLE_FIXUP** (yellow) - Could be fixups or small features
+  - 🔴 **UNLIKELY_FIXUP** (red) - Large changes, new functions
+  - 🟣 **NEW_FILE** (magenta) - Completely new files
+
+### **Flexible Selection Syntax**
+- **Individual lines**: `1,3,5` - Select specific line numbers
+- **Ranges**: `1-5` - Select line ranges
+- **Keywords**:
+  - `auto` - Use automatic classification (includes likely + possible fixups)
+  - `all` - Include all lines in the file
+  - `none` - Skip this file entirely
+
+### **File-by-File Organization**
+- Changes grouped by file for better review
+- Color-coded change types: `+` (added), `-` (deleted), `~` (modified)
+- Content preview with line numbers
+- Final selection summary with totals
+
+### **Example Interactive Session**
+```bash
+$ fastfixupfinder create --interactive
+
+🧠 Enhanced interactive mode with line-level classification control
+Found 2 potential fixup targets:
+
+1. a1b2c3d4: Add user authentication feature
+   👤 Author: John Doe <john@example.com>
+   📁 Files: auth.py, models.py
+   📝 Changed lines: 5
+
+🎯 Select targets (comma-separated numbers, 'all', or 'none'): 1
+
+🔍 Reviewing lines for target a1b2c3d4: Add user authentication feature...
+
+📄 auth.py
+
+  1. + Line 15: def authenticate_user(username, password):
+     Classification: Unlikely Fixup
+  2. ~ Line 23: return validate_credentials(user)  # Fix typo
+     Classification: Likely Fixup
+  3. + Line 31: # TODO: Add proper error handling
+     Classification: Likely Fixup
+
+🎯 Select lines from auth.py (numbers, 'all', 'none', or 'auto'): 2,3
+  ✅ Selected 2 lines
+
+✅ Final selection: 2 lines across 1 files
 ```
 
 ## 🛡️ Safety Features
@@ -389,7 +445,7 @@ This tool is particularly useful when:
 
 ### Create Command Options
 - `--dry-run` - Show what would be done without making changes
-- `--interactive, -i` - Interactively select targets
+- `--interactive, -i` - Interactively select targets with line-level classification control
 
 ## Troubleshooting
 

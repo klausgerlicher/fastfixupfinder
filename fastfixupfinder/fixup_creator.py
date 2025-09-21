@@ -122,7 +122,7 @@ class FixupCreator:
             return None
     
     def interactive_fixup_selection(self) -> List[str]:
-        """Interactively select which fixup commits to create."""
+        """Interactively select which fixup commits to create with line-level control."""
         fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         created_commits = []
         
@@ -132,10 +132,43 @@ class FixupCreator:
             return created_commits
         
         count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
-        header = f"🎯 Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}:"
+        header = f"🧠 Enhanced interactive mode with line-level classification control"
         print(Colors.colorize(header, Colors.WHITE, bold=True))
+        print(f"Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}:")
         print()
         
+        # Get user selection of targets first
+        selected_targets = self._interactive_target_selection(fixup_targets)
+        if not selected_targets:
+            return created_commits
+        
+        # For each selected target, allow line-level classification control
+        final_targets = []
+        for target in selected_targets:
+            enhanced_target = self._interactive_line_classification(target)
+            if enhanced_target and enhanced_target.changed_lines:
+                final_targets.append(enhanced_target)
+        
+        if not final_targets:
+            print(Colors.colorize("❌ No lines selected for fixup. Exiting.", Colors.YELLOW))
+            return created_commits
+        
+        # Store target commits for later rebase suggestion
+        self._target_commits = [target.commit_hash for target in final_targets]
+        
+        # Stage all changes first
+        self.repo.git.add('.')
+        
+        # Create selected fixup commits
+        for target in final_targets:
+            commit_hash = self.create_fixup_commit(target)
+            if commit_hash:
+                created_commits.append(commit_hash)
+        
+        return created_commits
+    
+    def _interactive_target_selection(self, fixup_targets: List[FixupTarget]) -> List[FixupTarget]:
+        """Interactive selection of target commits."""
         for i, target in enumerate(fixup_targets, 1):
             target_num = Colors.colorize(f"{i}.", Colors.BRIGHT_MAGENTA, bold=True)
             short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
@@ -161,15 +194,14 @@ class FixupCreator:
                 
                 if selection.lower() == 'none':
                     print(Colors.colorize("❌ No targets selected. Exiting.", Colors.YELLOW))
-                    return created_commits
+                    return []
                 elif selection.lower() == 'all':
-                    selected_indices = list(range(len(fixup_targets)))
-                    break
+                    return fixup_targets
                 else:
                     selected_indices = [int(x.strip()) - 1 for x in selection.split(',')]
                     # Validate indices
                     if all(0 <= i < len(fixup_targets) for i in selected_indices):
-                        break
+                        return [fixup_targets[i] for i in selected_indices]
                     else:
                         error_msg = Colors.colorize("❌ Invalid selection. Please try again.", Colors.BRIGHT_RED)
                         print(error_msg)
@@ -178,21 +210,133 @@ class FixupCreator:
                 error_msg = Colors.colorize("❌ Invalid input. Please enter numbers separated by commas.", Colors.BRIGHT_RED)
                 print(error_msg)
                 continue
+    
+    def _interactive_line_classification(self, target: FixupTarget) -> Optional[FixupTarget]:
+        """Interactive classification control for individual lines within a target."""
+        print()
+        header = f"🔍 Reviewing lines for target {target.commit_hash[:8]}: {target.commit_message[:50]}..."
+        print(Colors.colorize(header, Colors.WHITE, bold=True))
+        print()
         
-        # Store target commits for later rebase suggestion
-        self._target_commits = [fixup_targets[i].commit_hash for i in selected_indices]
+        # Group lines by file for better organization
+        files_lines = {}
+        for line in target.changed_lines:
+            if line.file_path not in files_lines:
+                files_lines[line.file_path] = []
+            files_lines[line.file_path].append(line)
         
-        # Stage all changes first
-        self.repo.git.add('.')
+        selected_lines = []
         
-        # Create selected fixup commits
-        for i in selected_indices:
-            target = fixup_targets[i]
-            commit_hash = self.create_fixup_commit(target)
-            if commit_hash:
-                created_commits.append(commit_hash)
+        for file_path, lines in files_lines.items():
+            file_header = Colors.colorize(f"📄 {file_path}", Colors.BLUE, bold=True)
+            print(file_header)
+            print()
+            
+            for i, line in enumerate(lines, 1):
+                # Show current classification with color coding
+                classification_color = self._get_classification_color(line.classification)
+                classification_text = Colors.colorize(
+                    line.classification.value.replace('_', ' ').title(), 
+                    classification_color, bold=True
+                )
+                
+                # Show change type symbol
+                if line.change_type == 'added':
+                    symbol = Colors.colorize("+", Colors.BRIGHT_GREEN, bold=True)
+                elif line.change_type == 'deleted':
+                    symbol = Colors.colorize("-", Colors.BRIGHT_RED, bold=True)
+                else:  # modified
+                    symbol = Colors.colorize("~", Colors.BRIGHT_YELLOW, bold=True)
+                
+                line_num = Colors.colorize(f"Line {line.line_number}", Colors.CYAN)
+                content_preview = line.content[:80] + "..." if len(line.content) > 80 else line.content
+                content = Colors.colorize(content_preview.strip(), Colors.WHITE)
+                
+                print(f"  {i}. {symbol} {line_num}: {content}")
+                print(f"     Classification: {classification_text}")
+                print()
+            
+            # Ask user which lines to include
+            while True:
+                try:
+                    prompt = Colors.colorize(f"🎯 Select lines from {file_path} ", Colors.BRIGHT_CYAN, bold=True)
+                    options = Colors.colorize("(numbers, 'all', 'none', or 'auto' for current classification)", Colors.DIM)
+                    selection = input(f"{prompt}{options}: ").strip()
+                    
+                    if selection.lower() == 'none':
+                        break  # Skip this file
+                    elif selection.lower() == 'all':
+                        selected_lines.extend(lines)
+                        break
+                    elif selection.lower() == 'auto':
+                        # Use current automatic classification - include likely and possible fixups
+                        auto_lines = [l for l in lines if l.classification in [
+                            ChangeClassification.LIKELY_FIXUP, 
+                            ChangeClassification.POSSIBLE_FIXUP
+                        ]]
+                        selected_lines.extend(auto_lines)
+                        auto_count = Colors.colorize(str(len(auto_lines)), Colors.BRIGHT_GREEN, bold=True)
+                        print(f"  ✅ Auto-selected {auto_count} lines based on classification")
+                        break
+                    else:
+                        # Parse line numbers
+                        line_indices = []
+                        for num_str in selection.split(','):
+                            num_str = num_str.strip()
+                            if '-' in num_str:  # Range like "1-3"
+                                start, end = map(int, num_str.split('-'))
+                                line_indices.extend(range(start-1, end))
+                            else:
+                                line_indices.append(int(num_str) - 1)
+                        
+                        # Validate indices
+                        if all(0 <= i < len(lines) for i in line_indices):
+                            selected_lines.extend([lines[i] for i in line_indices])
+                            selected_count = Colors.colorize(str(len(line_indices)), Colors.BRIGHT_GREEN, bold=True)
+                            print(f"  ✅ Selected {selected_count} lines")
+                            break
+                        else:
+                            error_msg = Colors.colorize("❌ Invalid selection. Please try again.", Colors.BRIGHT_RED)
+                            print(error_msg)
+                            continue
+                except ValueError:
+                    error_msg = Colors.colorize("❌ Invalid input. Use numbers, ranges (1-3), or keywords.", Colors.BRIGHT_RED)
+                    print(error_msg)
+                    continue
+            
+            print()
         
-        return created_commits
+        if not selected_lines:
+            print(Colors.colorize("⚠️  No lines selected for this target.", Colors.YELLOW))
+            return None
+        
+        # Create new target with only selected lines
+        selected_files = {line.file_path for line in selected_lines}
+        enhanced_target = FixupTarget(
+            commit_hash=target.commit_hash,
+            commit_message=target.commit_message,
+            author=target.author,
+            changed_lines=selected_lines,
+            files=selected_files
+        )
+        
+        total_selected = Colors.colorize(str(len(selected_lines)), Colors.BRIGHT_GREEN, bold=True)
+        total_files = Colors.colorize(str(len(selected_files)), Colors.BRIGHT_BLUE, bold=True)
+        print(f"✅ Final selection: {total_selected} lines across {total_files} files")
+        
+        return enhanced_target
+    
+    def _get_classification_color(self, classification: 'ChangeClassification') -> str:
+        """Get color for classification display."""
+        from .git_analyzer import ChangeClassification
+        
+        color_map = {
+            ChangeClassification.LIKELY_FIXUP: Colors.BRIGHT_GREEN,
+            ChangeClassification.POSSIBLE_FIXUP: Colors.BRIGHT_YELLOW,
+            ChangeClassification.UNLIKELY_FIXUP: Colors.BRIGHT_RED,
+            ChangeClassification.NEW_FILE: Colors.BRIGHT_MAGENTA
+        }
+        return color_map.get(classification, Colors.WHITE)
     
     def suggest_rebase_command(self, created_commits: List[str]) -> None:
         """Suggest the appropriate git rebase command."""

@@ -127,7 +127,7 @@ def status(repo, oneline, detailed, fixups_only, include_all):
 @main.command()
 @click.option('--repo', default='.', help='Path to git repository (default: current directory)')
 @click.option('--dry-run', is_flag=True, help='Show what would be done without making changes')
-@click.option('--interactive', '-i', is_flag=True, help='Interactively select targets')
+@click.option('--interactive', '-i', is_flag=True, help='Interactively select targets with line-level control')
 @click.option('--no-backup', is_flag=True, help='Skip automatic safety backup')
 def create(repo, dry_run, interactive, no_backup):
     """Create fixup commits for identified targets."""
@@ -197,7 +197,7 @@ Fast Fixup Finder Usage Examples:
 4. Preview what fixup commits would be created:
    fastfixupfinder create --dry-run
 
-5. Interactively select and create fixup commits:
+5. Interactively select and create fixup commits with line-level control:
    fastfixupfinder create --interactive
 
 6. Automatically create all fixup commits:
@@ -207,7 +207,7 @@ Typical Workflow:
 1. Make changes to your files
 2. Run 'fastfixupfinder status' to see potential targets
 3. Run 'fastfixupfinder status --detailed' for in-depth analysis
-4. Run 'fastfixupfinder create --interactive' to selectively create fixups
+4. Run 'fastfixupfinder create --interactive' for line-level fixup control
 5. Use the suggested 'git rebase -i --autosquash' command to apply fixups
 
 The tool works by:
