@@ -9,7 +9,7 @@ import difflib
 import git
 
 
-@dataclass
+@dataclass(frozen=True)
 class ChangedLine:
     """Represents a changed line in a file."""
     file_path: str
@@ -18,7 +18,7 @@ class ChangedLine:
     change_type: str  # 'added', 'modified', 'deleted'
 
 
-@dataclass
+@dataclass(frozen=True)
 class BlameInfo:
     """Information from git blame for a specific line."""
     commit_hash: str
