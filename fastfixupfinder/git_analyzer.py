@@ -69,10 +69,11 @@ class GitAnalyzer:
         
         for line in diff_output.split('\n'):
             if line.startswith('diff --git'):
-                # Extract file path
-                match = re.search(r'b/(.+)$', line)
+                # Extract file path from: diff --git a/path/file.c b/path/file.c
+                match = re.search(r'diff --git a/(.+) b/(.+)$', line)
                 if match:
-                    current_file = match.group(1)
+                    # Use the 'b/' path (destination) as it's more reliable
+                    current_file = match.group(2)
             elif line.startswith('@@'):
                 # Parse hunk header to get line numbers
                 match = re.search(r'@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@', line)
