@@ -148,6 +148,10 @@ fastfixupfinder status
 # See detailed analysis of your changes
 fastfixupfinder analyze
 
+# Show compact one-line output
+fastfixupfinder status --oneline
+fastfixupfinder analyze --oneline
+
 # Preview what fixup commits would be created
 fastfixupfinder create --dry-run
 
@@ -163,7 +167,9 @@ fastfixupfinder create
 | Command | Description |
 |---------|-------------|
 | `status` | Show potential fixup targets without making changes |
+| `status --oneline` | Show compact one-line output per target |
 | `analyze` | Show detailed analysis of changes and their target commits |
+| `analyze --oneline` | Show compact analysis output |
 | `create` | Create fixup commits for identified targets |
 | `create --dry-run` | Preview what would be created without making changes |
 | `create --interactive` | Interactively select which targets to create fixups for |
@@ -208,9 +214,18 @@ Detailed analysis of 2 fixup targets:
        + Line 67:     def is_valid(self):...
 ```
 
+**Compact Output (`--oneline` flag)**
+```bash
+Found 2 fixup targets:
+a1b2c3d4 Add user authentication feature (2 files, 5 lines)
+e5f6g7h8 Fix validation logic (1 files, 2 lines)
+```
+
 **When to use:**
 - **`status`** - Quick check before creating fixups, get overview of targets
+- **`status --oneline`** - Even more compact output for scripts or quick scans
 - **`analyze`** - Detailed review of exact changes, verify detection accuracy
+- **`analyze --oneline`** - Compact analysis for quick overview
 
 ## 🛡️ Safety Features
 
@@ -325,6 +340,9 @@ This tool is particularly useful when:
 
 ### Global Options
 - `--repo PATH` - Specify repository path (default: current directory)
+
+### Status and Analyze Command Options
+- `--oneline` - Show compact one-line output per target
 
 ### Create Command Options
 - `--dry-run` - Show what would be done without making changes
