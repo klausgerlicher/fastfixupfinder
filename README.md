@@ -16,16 +16,40 @@ When you edit files in a project, those changes often touch lines that were crea
 
 ### Installation
 
+#### Option 1: Using Virtual Environment (Recommended)
+
 ```bash
 # Clone the repository
 git clone https://github.com/kgerlich/fastfixupfinder.git
 cd fastfixupfinder
+
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install the tool
 pip install .
 
 # Or install in development mode
 pip install -e .
+```
+
+#### Option 2: Global Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/kgerlich/fastfixupfinder.git
+cd fastfixupfinder
+
+# Install globally (requires appropriate permissions)
+pip install .
+```
+
+#### Option 3: User Installation
+
+```bash
+# Install to user directory (no virtual env needed)
+pip install --user .
 ```
 
 ### Basic Usage
@@ -162,8 +186,9 @@ This tool is particularly useful when:
 ### Common Issues
 
 1. **"No fixup targets found"** - Ensure you have uncommitted changes and the files have git history
-2. **Module not found** - Run with `PYTHONPATH=. python -m fastfixupfinder.cli` if not installed
+2. **Module not found** - Run with `PYTHONPATH=. python -m fastfixupfinder.cli` if not installed, or activate your virtual environment
 3. **Permission errors** - Ensure you have write access to the git repository
+4. **Command not found after installation** - Make sure your virtual environment is activated or the installation path is in your PATH
 
 ### Debug Mode
 

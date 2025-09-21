@@ -10,6 +10,10 @@ Fast Fixup Finder is a Python CLI tool that automatically identifies fixup targe
 
 ### Development Commands
 ```bash
+# Set up development environment (recommended)
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
 # Install in development mode
 pip install -e .
 
