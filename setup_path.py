@@ -138,6 +138,17 @@ def test_installation(user_bin_path):
     
     print(f"✓ Found executable: {fastfixup_exe}")
     
+    # Check if executable has proper permissions
+    if not os.access(fastfixup_exe, os.X_OK):
+        print(f"⚠  Fixing executable permissions...")
+        try:
+            os.chmod(fastfixup_exe, 0o755)
+            print(f"✓ Fixed permissions for {fastfixup_exe}")
+        except Exception as e:
+            print(f"✗ Failed to fix permissions: {e}")
+            print(f"   Run manually: chmod +x {fastfixup_exe}")
+            return False
+    
     # Test if command works in current environment
     try:
         result = subprocess.run(
@@ -155,6 +166,16 @@ def test_installation(user_bin_path):
     except FileNotFoundError:
         print("⚠  Command not yet available (restart terminal or source shell config)")
         return False
+    except PermissionError:
+        print("✗ Permission denied - trying to fix...")
+        try:
+            os.chmod(fastfixup_exe, 0o755)
+            print("✓ Fixed permissions, try running fastfixupfinder again")
+            return False
+        except Exception as e:
+            print(f"✗ Could not fix permissions: {e}")
+            print(f"   Run manually: chmod +x {fastfixup_exe}")
+            return False
     except Exception as e:
         print(f"⚠  Error testing command: {e}")
         return False

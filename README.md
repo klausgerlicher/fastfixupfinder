@@ -92,6 +92,9 @@ export PATH="$PATH:$(python3 -m site --user-base)/bin"
 # After setup and restarting terminal
 fastfixupfinder --version
 
+# If permission denied error, fix permissions:
+./fix_permissions.sh
+
 # If command not found, use module syntax as fallback
 python3 -m fastfixupfinder.cli --help
 ```
@@ -272,7 +275,19 @@ This tool is particularly useful when:
    python3 -m fastfixupfinder.cli status
    ```
 
-3. **Module not found** - Installation or environment issue:
+3. **"Permission denied"** - Executable permissions issue:
+   ```bash
+   # Fix executable permissions (common with pip --user installs)
+   chmod +x ~/.local/bin/fastfixupfinder
+   
+   # Or run the setup script which fixes this automatically
+   python3 setup_path.py
+   
+   # Test after fixing
+   fastfixupfinder --version
+   ```
+
+4. **Module not found** - Installation or environment issue:
    ```bash
    # Check if installed
    pip list | grep fastfixupfinder
@@ -284,9 +299,9 @@ This tool is particularly useful when:
    PYTHONPATH=. python3 -m fastfixupfinder.cli
    ```
 
-4. **Permission errors** - Ensure you have write access to the git repository
+5. **Permission errors** - Ensure you have write access to the git repository
 
-5. **Virtual environment issues** - Make sure your virtual environment is activated:
+6. **Virtual environment issues** - Make sure your virtual environment is activated:
    ```bash
    source venv/bin/activate  # Linux/macOS
    venv\Scripts\activate     # Windows
