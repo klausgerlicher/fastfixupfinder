@@ -27,7 +27,8 @@ def status(repo, oneline):
         else:
             creator.status()
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        error_msg = Colors.colorize(f"❌ Error: {e}", Colors.BRIGHT_RED)
+        click.echo(error_msg, err=True)
         sys.exit(1)
 
 
@@ -47,13 +48,18 @@ def create(repo, dry_run, interactive, no_backup):
             created_commits = creator.create_fixup_commits(dry_run, auto_backup=not no_backup)
         
         if created_commits and not dry_run:
-            click.echo(f"Created {len(created_commits)} fixup commits.")
+            count_text = Colors.colorize(str(len(created_commits)), Colors.BRIGHT_GREEN, bold=True)
+            success_msg = f"✅ Created {count_text} fixup commit{'s' if len(created_commits) != 1 else ''}."
+            click.echo(Colors.colorize(success_msg, Colors.WHITE, bold=True))
             creator.suggest_rebase_command(created_commits)
         elif dry_run:
-            click.echo("Dry run completed. Use --interactive or remove --dry-run to create commits.")
+            dry_run_msg = Colors.colorize("🔍 Dry run completed.", Colors.BRIGHT_CYAN, bold=True)
+            hint_msg = Colors.colorize("Use --interactive or remove --dry-run to create commits.", Colors.DIM)
+            click.echo(f"{dry_run_msg} {hint_msg}")
         
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        error_msg = Colors.colorize(f"❌ Error: {e}", Colors.BRIGHT_RED)
+        click.echo(error_msg, err=True)
         sys.exit(1)
 
 
@@ -153,13 +159,16 @@ def restore(repo, backup_name):
         success = creator.restore_from_backup(backup_name)
         
         if success:
-            click.echo("✓ Backup restored successfully")
+            success_msg = Colors.colorize("✅ Backup restored successfully", Colors.BRIGHT_GREEN, bold=True)
+            click.echo(success_msg)
         else:
-            click.echo("✗ Failed to restore backup")
+            error_msg = Colors.colorize("❌ Failed to restore backup", Colors.BRIGHT_RED, bold=True)
+            click.echo(error_msg)
             sys.exit(1)
             
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        error_msg = Colors.colorize(f"❌ Error: {e}", Colors.BRIGHT_RED)
+        click.echo(error_msg, err=True)
         sys.exit(1)
 
 

@@ -55,7 +55,8 @@ class FixupCreator:
         created_commits = []
         
         if not fixup_targets:
-            print("No fixup targets found.")
+            print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
+            print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
             return created_commits
         
         # Create automatic backup before making changes
@@ -80,9 +81,15 @@ class FixupCreator:
             commit_msg = f"fixup! {target.commit_message}"
             
             if dry_run:
-                print(f"Would create fixup commit for {short_hash}: {target.commit_message}")
-                print(f"  Files: {', '.join(target.files)}")
-                print(f"  Changed lines: {len(target.changed_lines)}")
+                target_hash = Colors.colorize(short_hash, Colors.BRIGHT_CYAN, bold=True)
+                message = Colors.colorize(target.commit_message, Colors.WHITE, bold=True)
+                print(f"🔍 Would create fixup commit for {target_hash}: {message}")
+                
+                files_text = Colors.colorize(', '.join(target.files), Colors.BLUE)
+                print(f"  📁 Files: {files_text}")
+                
+                lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
+                print(f"  📝 Changed lines: {lines_count}")
                 return None
             
             # Stage only the files related to this target
@@ -93,17 +100,22 @@ class FixupCreator:
                     staged_files.append(file_path)
             
             if not staged_files:
-                print(f"No files to stage for target {short_hash}")
+                target_hash = Colors.colorize(short_hash, Colors.BRIGHT_CYAN, bold=True)
+                print(Colors.colorize(f"⚠️  No files to stage for target {target_hash}", Colors.YELLOW))
                 return None
             
             # Create the fixup commit
             commit = self.repo.index.commit(commit_msg)
-            print(f"Created fixup commit {commit.hexsha[:8]} for {short_hash}")
+            new_hash = Colors.colorize(commit.hexsha[:8], Colors.BRIGHT_GREEN, bold=True)
+            target_hash = Colors.colorize(short_hash, Colors.BRIGHT_CYAN, bold=True)
+            print(f"✅ Created fixup commit {new_hash} for {target_hash}")
             
             return commit.hexsha
             
         except Exception as e:
-            print(f"Error creating fixup commit for {target.commit_hash[:8]}: {e}")
+            target_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
+            error_msg = Colors.colorize(f"❌ Error creating fixup commit for {target_hash}: {e}", Colors.BRIGHT_RED)
+            print(error_msg)
             return None
     
     def interactive_fixup_selection(self) -> List[str]:
@@ -112,26 +124,40 @@ class FixupCreator:
         created_commits = []
         
         if not fixup_targets:
-            print("No fixup targets found.")
+            print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
+            print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
             return created_commits
         
-        print(f"Found {len(fixup_targets)} potential fixup targets:")
+        count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
+        header = f"🎯 Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}:"
+        print(Colors.colorize(header, Colors.WHITE, bold=True))
         print()
         
         for i, target in enumerate(fixup_targets, 1):
-            short_hash = target.commit_hash[:8]
-            print(f"{i}. {short_hash}: {target.commit_message}")
-            print(f"   Author: {target.author}")
-            print(f"   Files: {', '.join(target.files)}")
-            print(f"   Changed lines: {len(target.changed_lines)}")
+            target_num = Colors.colorize(f"{i}.", Colors.BRIGHT_MAGENTA, bold=True)
+            short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
+            message = Colors.colorize(target.commit_message, Colors.WHITE, bold=True)
+            print(f"{target_num} {short_hash}: {message}")
+            
+            author = Colors.colorize(f"   👤 Author: {target.author}", Colors.DIM)
+            print(author)
+            
+            files_text = Colors.colorize(', '.join(target.files), Colors.BLUE)
+            print(f"   📁 Files: {files_text}")
+            
+            lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
+            print(f"   📝 Changed lines: {lines_count}")
             print()
         
         # Get user selection
         while True:
             try:
-                selection = input("Select targets (comma-separated numbers, 'all', or 'none'): ").strip()
+                prompt = Colors.colorize("🎯 Select targets ", Colors.BRIGHT_CYAN, bold=True)
+                options = Colors.colorize("(comma-separated numbers, 'all', or 'none')", Colors.DIM)
+                selection = input(f"{prompt}{options}: ").strip()
                 
                 if selection.lower() == 'none':
+                    print(Colors.colorize("❌ No targets selected. Exiting.", Colors.YELLOW))
                     return created_commits
                 elif selection.lower() == 'all':
                     selected_indices = list(range(len(fixup_targets)))
@@ -142,10 +168,12 @@ class FixupCreator:
                     if all(0 <= i < len(fixup_targets) for i in selected_indices):
                         break
                     else:
-                        print("Invalid selection. Please try again.")
+                        error_msg = Colors.colorize("❌ Invalid selection. Please try again.", Colors.BRIGHT_RED)
+                        print(error_msg)
                         continue
             except ValueError:
-                print("Invalid input. Please enter numbers separated by commas.")
+                error_msg = Colors.colorize("❌ Invalid input. Please enter numbers separated by commas.", Colors.BRIGHT_RED)
+                print(error_msg)
                 continue
         
         # Stage all changes first
@@ -179,13 +207,19 @@ class FixupCreator:
             parent_commit = self.repo.git.rev_parse(f"{oldest_commit}^")
             
             print()
-            print("To apply the fixup commits, run:")
-            print(f"git rebase -i --autosquash {parent_commit}")
+            header = Colors.colorize("🚀 To apply the fixup commits, run:", Colors.WHITE, bold=True)
+            print(header)
+            command = Colors.colorize(f"git rebase -i --autosquash {parent_commit}", Colors.BRIGHT_GREEN, bold=True)
+            print(f"   {command}")
             
         except git.exc.GitCommandError:
             print()
-            print("To apply the fixup commits, run:")
-            print("git rebase -i --autosquash HEAD~<number_of_commits>")
+            header = Colors.colorize("🚀 To apply the fixup commits, run:", Colors.WHITE, bold=True)
+            print(header)
+            command = Colors.colorize("git rebase -i --autosquash HEAD~<number_of_commits>", Colors.BRIGHT_GREEN, bold=True)
+            print(f"   {command}")
+            hint = Colors.colorize("   (Replace <number_of_commits> with appropriate count)", Colors.DIM)
+            print(hint)
     
     def _create_safety_backup(self) -> None:
         """Create automatic safety backup before making changes."""
@@ -224,15 +258,21 @@ class FixupCreator:
                 fastfixup_stashes = [s for s in stashes if 'fastfixupfinder_backup' in s]
                 
                 if not fastfixup_stashes:
-                    print("No fastfixupfinder backups found")
+                    print(Colors.colorize("🔍 No fastfixupfinder backups found", Colors.YELLOW))
                     return False
                 
-                print("Available backups:")
+                header = Colors.colorize("📦 Available backups:", Colors.WHITE, bold=True)
+                print(header)
                 for i, stash in enumerate(fastfixup_stashes[:5]):  # Show last 5
-                    print(f"  {i}: {stash}")
+                    backup_num = Colors.colorize(f"  {i}:", Colors.BRIGHT_MAGENTA, bold=True)
+                    stash_info = Colors.colorize(stash, Colors.CYAN)
+                    print(f"{backup_num} {stash_info}")
                 
-                choice = input("Enter backup number to restore (or 'cancel'): ")
+                prompt = Colors.colorize("🔄 Enter backup number to restore ", Colors.BRIGHT_CYAN, bold=True)
+                options = Colors.colorize("(or 'cancel')", Colors.DIM)
+                choice = input(f"{prompt}{options}: ")
                 if choice.lower() == 'cancel':
+                    print(Colors.colorize("❌ Restore cancelled.", Colors.YELLOW))
                     return False
                 
                 try:
@@ -240,17 +280,22 @@ class FixupCreator:
                     if 0 <= idx < len(fastfixup_stashes):
                         stash_ref = fastfixup_stashes[idx].split(':')[0]
                         self.repo.git.stash("apply", stash_ref)
-                        print(f"✓ Restored backup: {fastfixup_stashes[idx]}")
+                        backup_info = Colors.colorize(fastfixup_stashes[idx], Colors.CYAN)
+                        success_msg = Colors.colorize(f"✅ Restored backup: {backup_info}", Colors.BRIGHT_GREEN)
+                        print(success_msg)
                         return True
                     else:
-                        print("Invalid selection")
+                        error_msg = Colors.colorize("❌ Invalid selection", Colors.BRIGHT_RED)
+                        print(error_msg)
                         return False
                 except ValueError:
-                    print("Invalid input")
+                    error_msg = Colors.colorize("❌ Invalid input", Colors.BRIGHT_RED)
+                    print(error_msg)
                     return False
                     
         except Exception as e:
-            print(f"Error restoring backup: {e}")
+            error_msg = Colors.colorize(f"❌ Error restoring backup: {e}", Colors.BRIGHT_RED)
+            print(error_msg)
             return False
     
     def status(self) -> None:
