@@ -12,6 +12,7 @@ dependencies = [
     "click>=8.0.0",
     "gitpython>=3.1.0",
 ]
+dynamic = ["readme"]
 
 [project.optional-dependencies]
 dev = [
@@ -24,9 +25,11 @@ dev = [
 [project.scripts]
 fastfixupfinder = "fastfixupfinder.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["fastfixupfinder*"]
+[tool.setuptools]
+packages = ["fastfixupfinder"]
+
+[tool.setuptools.dynamic]
+readme = {file = ["README.md"], content-type = "text/markdown"}
 
 [tool.black]
 line-length = 88
