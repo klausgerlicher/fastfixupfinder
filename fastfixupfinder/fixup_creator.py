@@ -306,3 +306,22 @@ class FixupCreator:
                     print(more_text)
             
             print()
+    
+    def status_oneline(self) -> None:
+        """Show current status of potential fixup targets in compact one-line format."""
+        fixup_targets = self.analyzer.find_fixup_targets()
+        
+        if not fixup_targets:
+            print(Colors.colorize("No fixup targets found.", Colors.YELLOW))
+            return
+        
+        # Simple header for oneline mode
+        count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
+        print(f"Found {count_text} fixup targets:")
+        
+        for target in fixup_targets:
+            short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
+            files_count = Colors.colorize(str(len(target.files)), Colors.BRIGHT_BLUE)
+            lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
+            message = target.commit_message[:60] + "..." if len(target.commit_message) > 60 else target.commit_message
+            print(f"{short_hash} {message} ({files_count} files, {lines_count} lines)")
