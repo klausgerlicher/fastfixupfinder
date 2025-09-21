@@ -121,8 +121,12 @@ class FixupCreator:
             print(error_msg)
             return None
     
-    def interactive_fixup_selection(self) -> List[str]:
-        """Interactively select which fixup commits to create with line-level control."""
+    def interactive_fixup_selection(self, compact_mode: bool = False) -> List[str]:
+        """Interactively select which fixup commits to create with line-level control.
+        
+        Args:
+            compact_mode: Use compact output for better readability with many changes
+        """
         fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         created_commits = []
         
@@ -145,7 +149,7 @@ class FixupCreator:
         # For each selected target, allow line-level classification control
         final_targets = []
         for target in selected_targets:
-            enhanced_target = self._interactive_line_classification(target)
+            enhanced_target = self._interactive_line_classification(target, compact_mode)
             if enhanced_target and enhanced_target.changed_lines:
                 final_targets.append(enhanced_target)
         
@@ -211,8 +215,13 @@ class FixupCreator:
                 print(error_msg)
                 continue
     
-    def _interactive_line_classification(self, target: FixupTarget) -> Optional[FixupTarget]:
-        """Interactive classification control for individual lines within a target."""
+    def _interactive_line_classification(self, target: FixupTarget, compact_mode: bool = False) -> Optional[FixupTarget]:
+        """Interactive classification control for individual lines within a target.
+        
+        Args:
+            target: The fixup target to review
+            compact_mode: Use compact output for better readability
+        """
         print()
         header = f"🔍 Reviewing lines for target {target.commit_hash[:8]}: {target.commit_message[:50]}..."
         print(Colors.colorize(header, Colors.WHITE, bold=True))
@@ -230,15 +239,32 @@ class FixupCreator:
         for file_path, lines in files_lines.items():
             file_header = Colors.colorize(f"📄 {file_path}", Colors.BLUE, bold=True)
             print(file_header)
-            print()
+            if not compact_mode:
+                print()
             
-            for i, line in enumerate(lines, 1):
+            # Show line count and summary in compact mode
+            if compact_mode:
+                total_lines = len(lines)
+                likely_count = sum(1 for l in lines if l.classification.value == 'likely_fixup')
+                possible_count = sum(1 for l in lines if l.classification.value == 'possible_fixup')
+                unlikely_count = sum(1 for l in lines if l.classification.value == 'unlikely_fixup')
+                
+                summary = f"  {total_lines} lines: "
+                if likely_count > 0:
+                    summary += Colors.colorize(f"{likely_count} likely", Colors.BRIGHT_GREEN) + " "
+                if possible_count > 0:
+                    summary += Colors.colorize(f"{possible_count} possible", Colors.BRIGHT_YELLOW) + " "
+                if unlikely_count > 0:
+                    summary += Colors.colorize(f"{unlikely_count} unlikely", Colors.BRIGHT_RED)
+                print(summary.strip())
+            
+            # Show individual lines (with limits in compact mode)
+            display_lines = lines[:10] if compact_mode else lines
+            
+            for i, line in enumerate(display_lines, 1):
                 # Show current classification with color coding
                 classification_color = self._get_classification_color(line.classification)
-                classification_text = Colors.colorize(
-                    line.classification.value.replace('_', ' ').title(), 
-                    classification_color, bold=True
-                )
+                classification_short = line.classification.value.replace('_fixup', '').replace('_file', '').replace('_', ' ').title()
                 
                 # Show change type symbol
                 if line.change_type == 'added':
@@ -248,19 +274,44 @@ class FixupCreator:
                 else:  # modified
                     symbol = Colors.colorize("~", Colors.BRIGHT_YELLOW, bold=True)
                 
-                line_num = Colors.colorize(f"Line {line.line_number}", Colors.CYAN)
-                content_preview = line.content[:80] + "..." if len(line.content) > 80 else line.content
-                content = Colors.colorize(content_preview.strip(), Colors.WHITE)
+                line_num = Colors.colorize(f"L{line.line_number}", Colors.CYAN)
                 
-                print(f"  {i}. {symbol} {line_num}: {content}")
-                print(f"     Classification: {classification_text}")
+                if compact_mode:
+                    # Compact format: shorter content and inline classification
+                    content_preview = line.content[:40] + "..." if len(line.content) > 40 else line.content
+                    content = Colors.colorize(content_preview.strip(), Colors.WHITE)
+                    classification_text = Colors.colorize(f"[{classification_short}]", classification_color)
+                    print(f"  {i}. {symbol} {line_num}: {content} {classification_text}")
+                else:
+                    # Full format: longer content and separate classification line
+                    content_preview = line.content[:80] + "..." if len(line.content) > 80 else line.content
+                    content = Colors.colorize(content_preview.strip(), Colors.WHITE)
+                    classification_text = Colors.colorize(
+                        line.classification.value.replace('_', ' ').title(), 
+                        classification_color, bold=True
+                    )
+                    print(f"  {i}. {symbol} Line {line.line_number}: {content}")
+                    print(f"     Classification: {classification_text}")
+                    print()
+            
+            # Show truncation notice in compact mode
+            if compact_mode and len(lines) > 10:
+                remaining = len(lines) - 10
+                truncated_msg = Colors.colorize(f"  ... and {remaining} more lines", Colors.DIM)
+                print(truncated_msg)
+            
+            if not compact_mode:
                 print()
             
             # Ask user which lines to include
             while True:
                 try:
-                    prompt = Colors.colorize(f"🎯 Select lines from {file_path} ", Colors.BRIGHT_CYAN, bold=True)
-                    options = Colors.colorize("(numbers, 'all', 'none', or 'auto' for current classification)", Colors.DIM)
+                    if compact_mode:
+                        prompt = Colors.colorize(f"🎯 Select from {file_path[:20]}{'...' if len(file_path) > 20 else ''} ", Colors.BRIGHT_CYAN, bold=True)
+                        options = Colors.colorize("(#s, 'all', 'none', 'auto')", Colors.DIM)
+                    else:
+                        prompt = Colors.colorize(f"🎯 Select lines from {file_path} ", Colors.BRIGHT_CYAN, bold=True)
+                        options = Colors.colorize("(numbers, 'all', 'none', or 'auto' for current classification)", Colors.DIM)
                     selection = input(f"{prompt}{options}: ").strip()
                     
                     if selection.lower() == 'none':

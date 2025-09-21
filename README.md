@@ -166,6 +166,9 @@ fastfixupfinder create --dry-run
 # Interactively select which fixups to create with line-level control
 fastfixupfinder create --interactive
 
+# Use compact output in interactive mode (for many changes)
+fastfixupfinder create --interactive --oneline
+
 # Create all fixup commits automatically
 fastfixupfinder create
 ```
@@ -182,6 +185,7 @@ fastfixupfinder create
 | `create` | Create fixup commits for identified targets |
 | `create --dry-run` | Preview what would be created without making changes |
 | `create --interactive` | Interactively select targets with line-level classification control |
+| `create --interactive --oneline` | Use compact output in interactive mode for better readability |
 | `create --no-backup` | Skip automatic safety backup (not recommended) |
 | `restore` | Restore from automatic safety backup |
 | `help-usage` | Show detailed usage examples and workflow guidance |
@@ -292,7 +296,9 @@ The interactive mode (`--interactive`) now provides line-level classification co
 - Content preview with line numbers
 - Final selection summary with totals
 
-### **Example Interactive Session**
+### **Example Interactive Sessions**
+
+**Full Mode (detailed output):**
 ```bash
 $ fastfixupfinder create --interactive
 
@@ -319,6 +325,32 @@ Found 2 potential fixup targets:
 
 🎯 Select lines from auth.py (numbers, 'all', 'none', or 'auto'): 2,3
   ✅ Selected 2 lines
+
+✅ Final selection: 2 lines across 1 files
+```
+
+**Compact Mode (for many changes):**
+```bash
+$ fastfixupfinder create --interactive --oneline
+
+🧠 Enhanced interactive mode with line-level classification control
+Found 1 potential fixup target:
+
+1. a1b2c3d4: Add user authentication feature
+
+🎯 Select targets: 1
+
+🔍 Reviewing lines for target a1b2c3d4...
+
+📄 auth.py
+  5 lines: 2 likely 1 possible 2 unlikely
+  1. + L15: def authenticate_user(username,... [Unlikely]
+  2. ~ L23: return validate_credentials(user)... [Likely]
+  3. + L31: # TODO: Add proper error handling [Likely]
+  ... and 2 more lines
+
+🎯 Select from auth.py (#s, 'all', 'none', 'auto'): auto
+  ✅ Auto-selected 2 lines based on classification
 
 ✅ Final selection: 2 lines across 1 files
 ```
@@ -446,6 +478,7 @@ This tool is particularly useful when:
 ### Create Command Options
 - `--dry-run` - Show what would be done without making changes
 - `--interactive, -i` - Interactively select targets with line-level classification control
+- `--oneline` - Use compact output in interactive mode (reduces screen clutter)
 
 ## Troubleshooting
 

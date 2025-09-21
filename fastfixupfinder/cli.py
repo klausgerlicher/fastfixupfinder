@@ -128,14 +128,15 @@ def status(repo, oneline, detailed, fixups_only, include_all):
 @click.option('--repo', default='.', help='Path to git repository (default: current directory)')
 @click.option('--dry-run', is_flag=True, help='Show what would be done without making changes')
 @click.option('--interactive', '-i', is_flag=True, help='Interactively select targets with line-level control')
+@click.option('--oneline', is_flag=True, help='Use compact output in interactive mode')
 @click.option('--no-backup', is_flag=True, help='Skip automatic safety backup')
-def create(repo, dry_run, interactive, no_backup):
+def create(repo, dry_run, interactive, oneline, no_backup):
     """Create fixup commits for identified targets."""
     try:
         creator = FixupCreator(repo)
         
         if interactive:
-            created_commits = creator.interactive_fixup_selection()
+            created_commits = creator.interactive_fixup_selection(compact_mode=oneline)
         else:
             created_commits = creator.create_fixup_commits(dry_run, auto_backup=not no_backup)
         
@@ -200,7 +201,10 @@ Fast Fixup Finder Usage Examples:
 5. Interactively select and create fixup commits with line-level control:
    fastfixupfinder create --interactive
 
-6. Automatically create all fixup commits:
+6. Use compact output in interactive mode (for many changes):
+   fastfixupfinder create --interactive --oneline
+
+7. Automatically create all fixup commits:
    fastfixupfinder create
 
 Typical Workflow:
