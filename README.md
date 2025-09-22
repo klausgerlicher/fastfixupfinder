@@ -172,6 +172,9 @@ fastfixupfinder create --interactive --oneline
 # Launch visual GUI for drag-and-drop assignment
 fastfixupfinder gui
 
+# Install shell tab completion
+fastfixupfinder install-completion
+
 # Create all fixup commits automatically
 fastfixupfinder create
 ```
@@ -190,6 +193,7 @@ fastfixupfinder create
 | `create --interactive` | Line-level control with detailed output | Precise control, complex assignments |
 | `create --interactive --oneline` | Compact interactive mode | Many changes, reduced clutter |
 | `gui` | **Visual drag-and-drop interface** | **Complex workflows, visual users** |
+| `install-completion` | Install shell tab completion | Enhanced productivity, frequent users |
 | `create --no-backup` | Skip automatic safety backup | Advanced users, CI environments |
 | `restore` | Restore from automatic safety backup | Error recovery, undo operations |
 | `help-usage` | Show detailed usage examples | Learning, reference |
@@ -399,6 +403,41 @@ $ fastfixupfinder gui
 
 The GUI provides an intuitive visual workflow that makes managing complex fixup assignments effortless!
 
+## ⚡ Tab Completion
+
+Fast Fixup Finder includes intelligent shell tab completion for enhanced productivity:
+
+### **Installation**
+```bash
+# Install tab completion for your shell
+fastfixupfinder install-completion
+
+# The command will detect your shell and provide setup instructions
+```
+
+### **Completion Features**
+- **🔤 Command completion** - Tab complete all commands (`status`, `create`, `gui`, etc.)
+- **📁 Repository paths** - Smart completion for `--repo` option (shows Git repositories)
+- **🚩 Flag completion** - Complete all option flags (`--oneline`, `--dry-run`, etc.)
+- **🔄 Backup names** - Complete backup names from git stash for restore command
+- **📂 Context-aware** - Only shows relevant completions based on current command
+
+### **Supported Shells**
+- **Bash** - Most common Linux/macOS shell
+- **Zsh** - Enhanced shell with better completion
+- **Fish** - Modern shell with built-in completion support
+
+### **Example Usage**
+```bash
+# Type and press TAB for completion
+fastfixupfinder <TAB>          # Shows: create, gui, status, restore, etc.
+fastfixupfinder status --<TAB>  # Shows: --oneline, --detailed, --fixups-only
+fastfixupfinder --repo <TAB>    # Shows: ../other-repo/, ./current-repo/
+fastfixupfinder restore --<TAB> # Shows: stash@{0}, stash@{1}, etc.
+```
+
+After installation, restart your terminal and enjoy faster, error-free command typing!
+
 **📝 Interactive CLI Mode (Compact):**
 ```bash
 $ fastfixupfinder create --interactive --oneline
@@ -433,6 +472,7 @@ Fast Fixup Finder includes built-in safety features:
 - **Dry-run mode** - Preview changes without modifying repository  
 - **Interactive selection** - Choose exactly which fixups to create
 - **Visual GUI mode** - Drag-and-drop interface for intuitive assignment
+- **Tab completion** - Shell completion for commands, paths, and options
 - **Backup restoration** - Easy recovery from automatic backups
 
 See [SAFETY.md](SAFETY.md) for comprehensive safety strategies and emergency recovery procedures.

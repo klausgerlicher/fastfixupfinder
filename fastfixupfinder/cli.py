@@ -8,6 +8,7 @@ from tabulate import tabulate
 
 from .fixup_creator import FixupCreator, Colors
 from .git_analyzer import FilterMode
+from .completion import RepoPath, BackupName, complete_repo_paths, complete_backup_names, install_completion
 
 
 @click.group()
@@ -18,7 +19,7 @@ def main():
 
 
 @main.command()
-@click.option('--repo', default='.', help='Path to git repository (default: current directory)')
+@click.option('--repo', type=RepoPath(exists=True, file_okay=False, dir_okay=True), default='.', help='Path to git repository (default: current directory)', shell_complete=complete_repo_paths)
 @click.option('--oneline', is_flag=True, help='Show compact one-line output per target')
 @click.option('--detailed', is_flag=True, help='Show detailed analysis of changes and target commits')
 @click.option('--fixups-only', is_flag=True, help='Only show high-confidence fixup targets')
@@ -217,7 +218,7 @@ def status(repo, oneline, detailed, fixups_only, include_all):
 
 
 @main.command()
-@click.option('--repo', default='.', help='Path to git repository (default: current directory)')
+@click.option('--repo', type=RepoPath(exists=True, file_okay=False, dir_okay=True), default='.', help='Path to git repository (default: current directory)', shell_complete=complete_repo_paths)
 @click.option('--dry-run', is_flag=True, help='Show what would be done without making changes')
 @click.option('--interactive', '-i', is_flag=True, help='Interactively select targets with line-level control')
 @click.option('--oneline', is_flag=True, help='Use compact output in interactive mode')
@@ -250,8 +251,8 @@ def create(repo, dry_run, interactive, oneline, no_backup):
 
 
 @main.command()
-@click.option('--repo', default='.', help='Path to git repository (default: current directory)')
-@click.option('--backup-name', help='Specific backup name to restore')
+@click.option('--repo', type=RepoPath(exists=True, file_okay=False, dir_okay=True), default='.', help='Path to git repository (default: current directory)', shell_complete=complete_repo_paths)
+@click.option('--backup-name', type=BackupName(), help='Specific backup name to restore', shell_complete=complete_backup_names)
 def restore(repo, backup_name):
     """Restore from a safety backup created by fastfixupfinder."""
     try:
@@ -273,7 +274,7 @@ def restore(repo, backup_name):
 
 
 @main.command()
-@click.option('--repo', default='.', help='Path to git repository (default: current directory)')
+@click.option('--repo', type=RepoPath(exists=True, file_okay=False, dir_okay=True), default='.', help='Path to git repository (default: current directory)', shell_complete=complete_repo_paths)
 def gui(repo):
     """Launch visual GUI for drag-and-drop fixup assignment."""
     try:
@@ -286,6 +287,12 @@ def gui(repo):
     except Exception as e:
         click.echo(Colors.colorize(f"❌ Error: {e}", Colors.BRIGHT_RED), err=True)
         sys.exit(1)
+
+
+@main.command(name='install-completion')
+def install_completion_cmd():
+    """Install shell tab completion for fastfixupfinder."""
+    install_completion()
 
 
 @main.command()
