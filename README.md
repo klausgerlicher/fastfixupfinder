@@ -194,6 +194,8 @@ fastfixupfinder create
 | `restore` | Restore from automatic safety backup | Error recovery, undo operations |
 | `help-usage` | Show detailed usage examples | Learning, reference |
 
+**📖 See [INTERACTIVE_GUIDE.md](INTERACTIVE_GUIDE.md) for detailed interactive mode documentation**
+
 ### Command Details
 
 #### `status` Command Modes
@@ -285,76 +287,36 @@ Large architectural changes
 
 ## 🧠 Enhanced Interactive Mode
 
-The interactive mode (`--interactive`) now provides line-level classification control:
+Interactive mode (`--interactive`) provides precise line-level control over which changes become fixup commits:
 
-### **Line-Level Selection**
-- **Visual Classification**: Each line shows its automatic classification with color coding
-  - 🟢 **LIKELY_FIXUP** (green) - Typos, comments, small fixes
-  - 🟡 **POSSIBLE_FIXUP** (yellow) - Could be fixups or small features
-  - 🔴 **UNLIKELY_FIXUP** (red) - Large changes, new functions
-  - 🟣 **NEW_FILE** (magenta) - Completely new files
+### **Key Features**
+- **Two-stage selection**: Choose target commits, then review individual lines
+- **Intelligent classification**: AI categorizes changes as likely/possible/unlikely fixups
+- **Flexible selection**: Use numbers, ranges, or keywords like `auto`, `all`, `none`
+- **Visual feedback**: Color-coded classifications and change types
+- **Compact mode**: Use `--oneline` for streamlined output with many changes
 
-### **Flexible Selection Syntax**
-- **Individual lines**: `1,3,5` - Select specific line numbers
-- **Ranges**: `1-5` - Select line ranges
-- **Keywords**:
-  - `auto` - Use automatic classification (includes likely + possible fixups)
-  - `all` - Include all lines in the file
-  - `none` - Skip this file entirely
-
-### **File-by-File Organization**
-- Changes grouped by file for better review
-- Color-coded change types: `+` (added), `-` (deleted), `~` (modified)
-- Content preview with line numbers
-- Final selection summary with totals
-
-### **Example Sessions**
-
-**🎨 Visual GUI Mode (Recommended for Complex Cases):**
+### **Quick Example**
 ```bash
-$ fastfixupfinder gui
+$ fastfixupfinder create --interactive --oneline
 
-# Visual interface opens with:
-# • Left panel: All changes grouped by file with color-coded classifications
-# • Right panel: Fixup targets with assignment counts
-# • TAB to switch panels, ↑↓ to navigate, ENTER to assign
-# • Real-time visual feedback and assignment tracking
-# • Press 'c' to create fixup commits when ready
-```
+🧠 Interactive mode: 2 targets:
+1. 08743fb3: Add basic calculator functions... (1 files, 3 lines)
+2. 59912895: Add utility functions... (1 files, 1 lines)
 
-**📝 Interactive CLI Mode (Full Control):**
-```bash
-$ fastfixupfinder create --interactive
+🎯 Select targets: 1
 
-🧠 Enhanced interactive mode with line-level classification control
-Found 2 potential fixup targets:
-
-1. 08743fb3: Add basic calculator with add and subtract functions
-   👤 Author: John Doe <john@example.com>
-   📁 Files: main.py
-   📝 Changed lines: 3
-
-2. 59912895: Add utility functions for input validation and result formatting
-   👤 Author: Jane Smith <jane@example.com>
-   📁 Files: utils.py
-   📝 Changed lines: 1
-
-🎯 Select targets (comma-separated numbers, 'all', or 'none'): 1
-
-🔍 Reviewing lines for target 08743fb3: Add basic calculator with add and subtract functio...
-
+🔍 08743fb3: Add basic calculator functions...
 📄 main.py
+2 lines: 2 likely
+  1. ~ L55: main() [Likely]
+  2. + L56: # Added test comment [Likely]
 
-  1. ~ Line 55: main()
-     Classification: Likely Fixup
-  2. + Line 56: # Added test comment for demo
-     Classification: Likely Fixup
-
-🎯 Select lines from main.py (numbers, 'all', 'none', or 'auto'): auto
+🎯 Select from main.py (#s, 'all', 'none', 'auto'): auto
   ✅ Auto-selected 2 lines based on classification
-
-✅ Final selection: 2 lines across 1 files
 ```
+
+**📖 For detailed interactive mode documentation, see [INTERACTIVE_GUIDE.md](INTERACTIVE_GUIDE.md)**
 
 ## 🎨 Visual GUI Mode
 
@@ -411,27 +373,6 @@ $ fastfixupfinder gui
 The GUI provides an intuitive visual workflow that makes managing complex fixup assignments effortless!
 
 
-**📝 Interactive CLI Mode (Compact):**
-```bash
-$ fastfixupfinder create --interactive --oneline
-
-🧠 Interactive mode: 2 targets:
-1. 08743fb3: Add basic calculator with add and subtra... (1 files, 3 lines)
-2. 59912895: Add utility functions for input validation and ... (1 files, 1 lines)
-
-🎯 Select targets (comma-separated numbers, 'all', or 'none'): 1
-
-🔍 08743fb3: Add basic calculator with add and...
-📄 main.py
-2 lines: 2 likely
-  1. ~ L55: main() [Likely]
-  2. + L56: # Added test comment for demo [Likely]
-
-🎯 Select from main.py (#s, 'all', 'none', 'auto'): auto
-  ✅ Auto-selected 2 lines based on classification
-
-✅ Final selection: 2 lines across 1 files
-```
 
 ## 🛡️ Safety Features
 
