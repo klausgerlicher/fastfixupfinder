@@ -351,5 +351,4 @@ each commit represents a logical change.
 
 
 if __name__ == '__main__':
-    main()# final test for rebase command visibility
-# Testing classification system
+    main()

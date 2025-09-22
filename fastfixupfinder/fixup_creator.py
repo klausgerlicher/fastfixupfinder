@@ -7,7 +7,7 @@ from typing import List, Optional
 
 import git
 
-from .git_analyzer import FixupTarget, GitAnalyzer
+from .git_analyzer import FixupTarget, GitAnalyzer, ChangeClassification
 
 # Color constants for terminal output
 class Colors:
@@ -136,13 +136,16 @@ class FixupCreator:
             return created_commits
         
         count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
-        header = f"🧠 Enhanced interactive mode with line-level classification control"
-        print(Colors.colorize(header, Colors.WHITE, bold=True))
-        print(f"Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}:")
-        print()
+        if compact_mode:
+            print(f"🧠 Interactive mode: {count_text} target{'s' if len(fixup_targets) != 1 else ''}:")
+        else:
+            header = f"🧠 Enhanced interactive mode with line-level classification control"
+            print(Colors.colorize(header, Colors.WHITE, bold=True))
+            print(f"Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}:")
+            print()
         
         # Get user selection of targets first
-        selected_targets = self._interactive_target_selection(fixup_targets)
+        selected_targets = self._interactive_target_selection(fixup_targets, compact_mode)
         if not selected_targets:
             return created_commits
         
@@ -171,23 +174,36 @@ class FixupCreator:
         
         return created_commits
     
-    def _interactive_target_selection(self, fixup_targets: List[FixupTarget]) -> List[FixupTarget]:
+    def _interactive_target_selection(self, fixup_targets: List[FixupTarget], compact_mode: bool = False) -> List[FixupTarget]:
         """Interactive selection of target commits."""
         for i, target in enumerate(fixup_targets, 1):
             target_num = Colors.colorize(f"{i}.", Colors.BRIGHT_MAGENTA, bold=True)
             short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
-            message = Colors.colorize(target.commit_message, Colors.WHITE, bold=True)
-            print(f"{target_num} {short_hash}: {message}")
             
-            author = Colors.colorize(f"   👤 Author: {target.author}", Colors.DIM)
-            print(author)
-            
-            files_text = Colors.colorize(', '.join(target.files), Colors.BLUE)
-            print(f"   📁 Files: {files_text}")
-            
-            lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
-            print(f"   📝 Changed lines: {lines_count}")
-            print()
+            if compact_mode:
+                # Compact format: number, hash, truncated message, counts
+                clean_message = ' '.join(target.commit_message.split())
+                if len(clean_message) > 50:
+                    message = clean_message[:47] + "..."
+                else:
+                    message = clean_message
+                
+                files_count = Colors.colorize(f"({len(target.files)} files, {len(target.changed_lines)} lines)", Colors.DIM)
+                print(f"{target_num} {short_hash}: {message} {files_count}")
+            else:
+                # Full format
+                message = Colors.colorize(target.commit_message, Colors.WHITE, bold=True)
+                print(f"{target_num} {short_hash}: {message}")
+                
+                author = Colors.colorize(f"   👤 Author: {target.author}", Colors.DIM)
+                print(author)
+                
+                files_text = Colors.colorize(', '.join(target.files), Colors.BLUE)
+                print(f"   📁 Files: {files_text}")
+                
+                lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
+                print(f"   📝 Changed lines: {lines_count}")
+                print()
         
         # Get user selection
         while True:
@@ -222,10 +238,14 @@ class FixupCreator:
             target: The fixup target to review
             compact_mode: Use compact output for better readability
         """
-        print()
-        header = f"🔍 Reviewing lines for target {target.commit_hash[:8]}: {target.commit_message[:50]}..."
-        print(Colors.colorize(header, Colors.WHITE, bold=True))
-        print()
+        if compact_mode:
+            header = f"🔍 {target.commit_hash[:8]}: {target.commit_message[:40]}..."
+            print(Colors.colorize(header, Colors.WHITE, bold=True))
+        else:
+            print()
+            header = f"🔍 Reviewing lines for target {target.commit_hash[:8]}: {target.commit_message[:50]}..."
+            print(Colors.colorize(header, Colors.WHITE, bold=True))
+            print()
         
         # Group lines by file for better organization
         files_lines = {}
@@ -237,9 +257,12 @@ class FixupCreator:
         selected_lines = []
         
         for file_path, lines in files_lines.items():
-            file_header = Colors.colorize(f"📄 {file_path}", Colors.BLUE, bold=True)
-            print(file_header)
-            if not compact_mode:
+            if compact_mode:
+                file_header = Colors.colorize(f"📄 {file_path}", Colors.BLUE, bold=True)
+                print(file_header)
+            else:
+                file_header = Colors.colorize(f"📄 {file_path}", Colors.BLUE, bold=True)
+                print(file_header)
                 print()
             
             # Show line count and summary in compact mode
