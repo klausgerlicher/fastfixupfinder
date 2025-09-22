@@ -62,11 +62,19 @@ def status(repo, oneline, detailed, fixups_only, include_all):
             
             for i, target in enumerate(targets, 1):
                 if oneline:
-                    # Compact one-line format
+                    # Compact one-line format with proper truncation
                     short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
                     files_count = Colors.colorize(str(len(target.files)), Colors.BRIGHT_BLUE)
                     lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
-                    message = target.commit_message[:60] + "..." if len(target.commit_message) > 60 else target.commit_message
+                    
+                    # Calculate available space for message (assuming 80 char terminal)
+                    # 8 (hash) + 1 (space) + X (message) + 1 (space) + ~15 (counts) = 80
+                    max_message_len = 55
+                    if len(target.commit_message) > max_message_len:
+                        message = target.commit_message[:max_message_len-3] + "..."
+                    else:
+                        message = target.commit_message
+                    
                     click.echo(f"{short_hash} {message} ({files_count} files, {lines_count} lines)")
                 else:
                     # Full detailed format
@@ -75,11 +83,24 @@ def status(repo, oneline, detailed, fixups_only, include_all):
                     click.echo(f"{target_num} 🎯 Target Commit: {commit_hash}")
                     
                     # Commit message
-                    message = Colors.colorize(f"   💬 Message: {target.commit_message}", Colors.WHITE, bold=True)
-                    click.echo(message)
+                    # Commit message with wrapping for long messages
+                    message_header = Colors.colorize("   💬 Message: ", Colors.WHITE, bold=True)
+                    if len(target.commit_message) > 80:
+                        # Split long messages across multiple lines
+                        first_line = target.commit_message[:77] + "..."
+                        click.echo(f"{message_header}{first_line}")
+                        if len(target.commit_message) > 150:
+                            second_line = "" + target.commit_message[77:150] + "..."
+                        else:
+                            second_line = "" + target.commit_message[77:]
+                        if second_line.strip():
+                            click.echo(Colors.colorize(f"   {second_line}", Colors.WHITE))
+                    else:
+                        click.echo(f"{message_header}{target.commit_message}")
                     
-                    # Author
-                    author = Colors.colorize(f"   👤 Author: {target.author}", Colors.DIM)
+                    # Author (truncate if too long)
+                    author_text = target.author[:50] + "..." if len(target.author) > 50 else target.author
+                    author = Colors.colorize(f"   👤 Author: {author_text}", Colors.DIM)
                     click.echo(author)
                     
                     # File count
