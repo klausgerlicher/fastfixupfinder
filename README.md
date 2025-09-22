@@ -416,11 +416,12 @@ fastfixupfinder install-completion
 ```
 
 ### **Completion Features**
-- **🔤 Command completion** - Tab complete all commands (`status`, `create`, `gui`, etc.)
+- **🔤 Command completion** - Tab complete all commands and partial matches (`sta` → `status`)
 - **📁 Repository paths** - Smart completion for `--repo` option (shows Git repositories)
 - **🚩 Flag completion** - Complete all option flags (`--oneline`, `--dry-run`, etc.)
 - **🔄 Backup names** - Complete backup names from git stash for restore command
 - **📂 Context-aware** - Only shows relevant completions based on current command
+- **🎯 Partial matching** - Type part of command name and TAB completes the rest
 
 ### **Supported Shells**
 - **Bash** - Most common Linux/macOS shell
@@ -431,6 +432,8 @@ fastfixupfinder install-completion
 ```bash
 # Type and press TAB for completion
 fastfixupfinder <TAB>          # Shows: create, gui, status, restore, etc.
+fastfixupfinder sta<TAB>       # Completes to: status
+fastfixupfinder cr<TAB>        # Completes to: create
 fastfixupfinder status --<TAB>  # Shows: --oneline, --detailed, --fixups-only
 fastfixupfinder --repo <TAB>    # Shows: ../other-repo/, ./current-repo/
 fastfixupfinder restore --<TAB> # Shows: stash@{0}, stash@{1}, etc.
