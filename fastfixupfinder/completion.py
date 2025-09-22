@@ -116,6 +116,16 @@ def install_completion():
     print("=" * 50)
     print()
     
+    # Check if fastfixupfinder command is available
+    import shutil
+    if not shutil.which('fastfixupfinder'):
+        print("⚠️  WARNING: 'fastfixupfinder' command not found in PATH")
+        print("   Tab completion requires the package to be properly installed.")
+        print("   Please run: pip install -e . (or pip install .)")
+        print("   Then restart this command.")
+        print()
+        return
+    
     if shell in completion_commands:
         cmd_info = completion_commands[shell]
         print(f"📋 Detected shell: {shell}")

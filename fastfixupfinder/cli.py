@@ -18,6 +18,11 @@ def main():
     pass
 
 
+# Enable shell completion
+if __name__ == '__main__':
+    main()
+
+
 @main.command()
 @click.option('--repo', type=RepoPath(exists=True, file_okay=False, dir_okay=True), default='.', help='Path to git repository (default: current directory)', shell_complete=complete_repo_paths)
 @click.option('--oneline', is_flag=True, help='Show compact one-line output per target')

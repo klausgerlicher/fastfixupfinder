@@ -409,11 +409,16 @@ Fast Fixup Finder includes intelligent shell tab completion for enhanced product
 
 ### **Installation**
 ```bash
-# Install tab completion for your shell
+# First ensure fastfixupfinder is properly installed
+pip install -e .  # or pip install .
+
+# Then install tab completion for your shell
 fastfixupfinder install-completion
 
 # The command will detect your shell and provide setup instructions
 ```
+
+**Note:** Tab completion requires the `fastfixupfinder` command to be available in your PATH. Running via `python -m fastfixupfinder.cli` won't provide completion support.
 
 ### **Completion Features**
 - **🔤 Command completion** - Tab complete all commands and partial matches (`sta` → `status`)
