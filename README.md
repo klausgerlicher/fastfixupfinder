@@ -172,9 +172,6 @@ fastfixupfinder create --interactive --oneline
 # Launch visual GUI for drag-and-drop assignment
 fastfixupfinder gui
 
-# Install shell tab completion
-fastfixupfinder install-completion
-
 # Create all fixup commits automatically
 fastfixupfinder create
 ```
@@ -193,7 +190,6 @@ fastfixupfinder create
 | `create --interactive` | Line-level control with detailed output | Precise control, complex assignments |
 | `create --interactive --oneline` | Compact interactive mode | Many changes, reduced clutter |
 | `gui` | **Visual drag-and-drop interface** | **Complex workflows, visual users** |
-| `install-completion` | Install shell tab completion | Enhanced productivity, frequent users |
 | `create --no-backup` | Skip automatic safety backup | Advanced users, CI environments |
 | `restore` | Restore from automatic safety backup | Error recovery, undo operations |
 | `help-usage` | Show detailed usage examples | Learning, reference |
@@ -204,17 +200,23 @@ fastfixupfinder create
 
 **`fastfixupfinder status`** - Quick overview (default)
 ```bash
-Found 2 potential fixup targets:
+🎯 Found 2 potential fixup targets:
 
-• a1b2c3d4: Add user authentication feature
-  Author: John Doe <john@example.com>  
-  Files: auth.py, models.py
-  Changed lines: 5
+• 08743fb3: Add basic calculator with add and subtract functions
+  👤 Author: John Doe <john@example.com>
+  📁 File: main.py
+  📝 Changed lines: 3
+  📋 Sample changes:
+    ~ main.py:55
+    + main.py:56
+    + main.py:57
 
-• e5f6g7h8: Fix validation logic
-  Author: Jane Smith <jane@example.com>
-  Files: validators.py
-  Changed lines: 2
+• 59912895: Add utility functions for input validation and result formatting
+  👤 Author: Jane Smith <jane@example.com>
+  📁 File: utils.py
+  📝 Changed lines: 1
+  📋 Sample changes:
+    + utils.py:17
 ```
 
 **`fastfixupfinder status --detailed`** - Detailed breakdown
@@ -238,8 +240,10 @@ Detailed analysis of 2 fixup targets:
 **Compact Output (`--oneline` flag)**
 ```bash
 Found 2 fixup targets:
-a1b2c3d4 Add user authentication feature (2 files, 5 lines)
-e5f6g7h8 Fix validation logic (1 files, 2 lines)
+Hash      Commit Message                                       Files    Lines
+--------  -----------------------------------------------  -------  -------
+08743fb3  Add basic calculator with add and subtract fun...        1        3
+59912895  Add utility functions for input validation a...        1        1
 ```
 
 **When to use:**
@@ -325,26 +329,29 @@ $ fastfixupfinder create --interactive
 🧠 Enhanced interactive mode with line-level classification control
 Found 2 potential fixup targets:
 
-1. a1b2c3d4: Add user authentication feature
+1. 08743fb3: Add basic calculator with add and subtract functions
    👤 Author: John Doe <john@example.com>
-   📁 Files: auth.py, models.py
-   📝 Changed lines: 5
+   📁 Files: main.py
+   📝 Changed lines: 3
+
+2. 59912895: Add utility functions for input validation and result formatting
+   👤 Author: Jane Smith <jane@example.com>
+   📁 Files: utils.py
+   📝 Changed lines: 1
 
 🎯 Select targets (comma-separated numbers, 'all', or 'none'): 1
 
-🔍 Reviewing lines for target a1b2c3d4: Add user authentication feature...
+🔍 Reviewing lines for target 08743fb3: Add basic calculator with add and subtract functio...
 
-📄 auth.py
+📄 main.py
 
-  1. + Line 15: def authenticate_user(username, password):
-     Classification: Unlikely Fixup
-  2. ~ Line 23: return validate_credentials(user)  # Fix typo
+  1. ~ Line 55: main()
      Classification: Likely Fixup
-  3. + Line 31: # TODO: Add proper error handling
+  2. + Line 56: # Added test comment for demo
      Classification: Likely Fixup
 
-🎯 Select lines from auth.py (numbers, 'all', 'none', or 'auto'): 2,3
-  ✅ Selected 2 lines
+🎯 Select lines from main.py (numbers, 'all', 'none', or 'auto'): auto
+  ✅ Auto-selected 2 lines based on classification
 
 ✅ Final selection: 2 lines across 1 files
 ```
@@ -403,70 +410,24 @@ $ fastfixupfinder gui
 
 The GUI provides an intuitive visual workflow that makes managing complex fixup assignments effortless!
 
-## ⚡ Tab Completion
-
-Fast Fixup Finder includes intelligent shell tab completion for enhanced productivity:
-
-### **Installation**
-```bash
-# First ensure fastfixupfinder is properly installed
-pip install -e .  # or pip install .
-
-# Then install tab completion for your shell
-fastfixupfinder install-completion
-
-# The command will detect your shell and provide setup instructions
-```
-
-**Note:** Tab completion requires the `fastfixupfinder` command to be available in your PATH. Running via `python -m fastfixupfinder.cli` won't provide completion support.
-
-### **Completion Features**
-- **🔤 Command completion** - Tab complete all commands and partial matches (`sta` → `status`)
-- **📁 Repository paths** - Smart completion for `--repo` option (shows Git repositories)
-- **🚩 Flag completion** - Complete all option flags (`--oneline`, `--dry-run`, etc.)
-- **🔄 Backup names** - Complete backup names from git stash for restore command
-- **📂 Context-aware** - Only shows relevant completions based on current command
-- **🎯 Partial matching** - Type part of command name and TAB completes the rest
-
-### **Supported Shells**
-- **Bash** - Most common Linux/macOS shell
-- **Zsh** - Enhanced shell with better completion
-- **Fish** - Modern shell with built-in completion support
-
-### **Example Usage**
-```bash
-# Type and press TAB for completion
-fastfixupfinder <TAB>          # Shows: create, gui, status, restore, etc.
-fastfixupfinder sta<TAB>       # Completes to: status
-fastfixupfinder cr<TAB>        # Completes to: create
-fastfixupfinder status --<TAB>  # Shows: --oneline, --detailed, --fixups-only
-fastfixupfinder --repo <TAB>    # Shows: ../other-repo/, ./current-repo/
-fastfixupfinder restore --<TAB> # Shows: stash@{0}, stash@{1}, etc.
-```
-
-After installation, restart your terminal and enjoy faster, error-free command typing!
 
 **📝 Interactive CLI Mode (Compact):**
 ```bash
 $ fastfixupfinder create --interactive --oneline
 
-🧠 Enhanced interactive mode with line-level classification control
-Found 1 potential fixup target:
+🧠 Interactive mode: 2 targets:
+1. 08743fb3: Add basic calculator with add and subtra... (1 files, 3 lines)
+2. 59912895: Add utility functions for input validation and ... (1 files, 1 lines)
 
-1. a1b2c3d4: Add user authentication feature
+🎯 Select targets (comma-separated numbers, 'all', or 'none'): 1
 
-🎯 Select targets: 1
+🔍 08743fb3: Add basic calculator with add and...
+📄 main.py
+2 lines: 2 likely
+  1. ~ L55: main() [Likely]
+  2. + L56: # Added test comment for demo [Likely]
 
-🔍 Reviewing lines for target a1b2c3d4...
-
-📄 auth.py
-  5 lines: 2 likely 1 possible 2 unlikely
-  1. + L15: def authenticate_user(username,... [Unlikely]
-  2. ~ L23: return validate_credentials(user)... [Likely]
-  3. + L31: # TODO: Add proper error handling [Likely]
-  ... and 2 more lines
-
-🎯 Select from auth.py (#s, 'all', 'none', 'auto'): auto
+🎯 Select from main.py (#s, 'all', 'none', 'auto'): auto
   ✅ Auto-selected 2 lines based on classification
 
 ✅ Final selection: 2 lines across 1 files
@@ -480,7 +441,6 @@ Fast Fixup Finder includes built-in safety features:
 - **Dry-run mode** - Preview changes without modifying repository  
 - **Interactive selection** - Choose exactly which fixups to create
 - **Visual GUI mode** - Drag-and-drop interface for intuitive assignment
-- **Tab completion** - Shell completion for commands, paths, and options
 - **Backup restoration** - Easy recovery from automatic backups
 
 See [SAFETY.md](SAFETY.md) for comprehensive safety strategies and emergency recovery procedures.
@@ -522,35 +482,35 @@ graph LR
 
 ```bash
 $ fastfixupfinder status
-Found 2 potential fixup targets:
+🎯 Found 2 potential fixup targets:
 
-• a1b2c3d4: Add user authentication feature
-  Author: John Doe <john@example.com>
-  Files: auth.py, models.py
-  Changed lines: 5
+• 08743fb3: Add basic calculator with add and subtract functions
+  👤 Author: John Doe <john@example.com>
+  📁 File: main.py
+  📝 Changed lines: 3
 
-• e5f6g7h8: Fix validation logic
-  Author: Jane Smith <jane@example.com>
-  Files: validators.py
-  Changed lines: 2
+• 59912895: Add utility functions for input validation and result formatting
+  👤 Author: Jane Smith <jane@example.com>
+  📁 File: utils.py
+  📝 Changed lines: 1
 
 $ fastfixupfinder create --interactive
+🧠 Enhanced interactive mode with line-level classification control
 Found 2 potential fixup targets:
 
-1. a1b2c3d4: Add user authentication feature
-   Author: John Doe <john@example.com>
-   Files: auth.py, models.py
-   Changed lines: 5
+1. 08743fb3: Add basic calculator with add and subtract functions
+   👤 Author: John Doe <john@example.com>
+   📁 Files: main.py
+   📝 Changed lines: 3
 
-2. e5f6g7h8: Fix validation logic
-   Author: Jane Smith <jane@example.com>
-   Files: validators.py
-   Changed lines: 2
+2. 59912895: Add utility functions for input validation and result formatting
+   👤 Author: Jane Smith <jane@example.com>
+   📁 Files: utils.py
+   📝 Changed lines: 1
 
-Select targets (comma-separated numbers, 'all', or 'none'): 1,2
+🎯 Select targets (comma-separated numbers, 'all', or 'none'): all
 
-Created fixup commit 12345678 for a1b2c3d4
-Created fixup commit 87654321 for e5f6g7h8
+✅ Created 2 fixup commits.
 
 To apply the fixup commits, run:
 git rebase -i --autosquash HEAD~5
