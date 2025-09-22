@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import click
+from tabulate import tabulate
 
 from .fixup_creator import FixupCreator, Colors
 from .git_analyzer import FilterMode
@@ -60,24 +61,52 @@ def status(repo, oneline, detailed, fixups_only, include_all):
                 click.echo(Colors.colorize(header, Colors.WHITE, bold=True))
                 click.echo()
             
-            for i, target in enumerate(targets, 1):
-                if oneline:
-                    # Compact one-line format with proper truncation
-                    short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
-                    files_count = Colors.colorize(str(len(target.files)), Colors.BRIGHT_BLUE)
-                    lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
+            if oneline:
+                # Create table data for compact format
+                table_data = []
+                for target in targets:
+                    short_hash = target.commit_hash[:8]
                     
-                    # Calculate available space for message (assuming 80 char terminal)
-                    # 8 (hash) + 1 (space) + X (message) + 1 (space) + ~15 (counts) = 80
+                    # Truncate message for table display and clean up
+                    # Remove newlines and extra whitespace
+                    clean_message = ' '.join(target.commit_message.split())
                     max_message_len = 55
-                    if len(target.commit_message) > max_message_len:
-                        message = target.commit_message[:max_message_len-3] + "..."
+                    if len(clean_message) > max_message_len:
+                        message = clean_message[:max_message_len-3] + "..."
                     else:
-                        message = target.commit_message
+                        message = clean_message
                     
-                    click.echo(f"{short_hash} {message} ({files_count} files, {lines_count} lines)")
-                else:
-                    # Full detailed format
+                    files_count = len(target.files)
+                    lines_count = len(target.changed_lines)
+                    
+                    table_data.append([short_hash, message, files_count, lines_count])
+                
+                # Create table with colored headers
+                headers = [
+                    Colors.colorize("Hash", Colors.BRIGHT_CYAN, bold=True),
+                    Colors.colorize("Commit Message", Colors.WHITE, bold=True),
+                    Colors.colorize("Files", Colors.BRIGHT_BLUE, bold=True),
+                    Colors.colorize("Lines", Colors.BRIGHT_YELLOW, bold=True)
+                ]
+                
+                # Color the data
+                colored_data = []
+                for row in table_data:
+                    colored_row = [
+                        Colors.colorize(row[0], Colors.BRIGHT_CYAN, bold=True),  # hash
+                        row[1],  # message (no color for readability)
+                        Colors.colorize(str(row[2]), Colors.BRIGHT_BLUE),  # files
+                        Colors.colorize(str(row[3]), Colors.BRIGHT_YELLOW)  # lines
+                    ]
+                    colored_data.append(colored_row)
+                
+                # Print table
+                table_output = tabulate(colored_data, headers=headers, tablefmt="simple", stralign="left")
+                click.echo(table_output)
+            
+            else:
+                # Full detailed format
+                for i, target in enumerate(targets, 1):
                     target_num = Colors.colorize(f"{i}.", Colors.BRIGHT_MAGENTA, bold=True)
                     commit_hash = Colors.colorize(target.commit_hash, Colors.BRIGHT_CYAN, bold=True)
                     click.echo(f"{target_num} 🎯 Target Commit: {commit_hash}")
@@ -135,7 +164,49 @@ def status(repo, oneline, detailed, fixups_only, include_all):
         else:
             # Brief status (original status command)
             if oneline:
-                creator.status_oneline()
+                # Create table data for compact format
+                table_data = []
+                for target in targets:
+                    short_hash = target.commit_hash[:8]
+                    
+                    # Truncate message for table display and clean up
+                    # Remove newlines and extra whitespace
+                    clean_message = ' '.join(target.commit_message.split())
+                    max_message_len = 55
+                    if len(clean_message) > max_message_len:
+                        message = clean_message[:max_message_len-3] + "..."
+                    else:
+                        message = clean_message
+                    
+                    files_count = len(target.files)
+                    lines_count = len(target.changed_lines)
+                    
+                    table_data.append([short_hash, message, files_count, lines_count])
+                
+                # Create table with colored headers
+                headers = [
+                    Colors.colorize("Hash", Colors.BRIGHT_CYAN, bold=True),
+                    Colors.colorize("Commit Message", Colors.WHITE, bold=True),
+                    Colors.colorize("Files", Colors.BRIGHT_BLUE, bold=True),
+                    Colors.colorize("Lines", Colors.BRIGHT_YELLOW, bold=True)
+                ]
+                
+                # Color the data
+                colored_data = []
+                for row in table_data:
+                    colored_row = [
+                        Colors.colorize(row[0], Colors.BRIGHT_CYAN, bold=True),  # hash
+                        row[1],  # message (no color for readability)
+                        Colors.colorize(str(row[2]), Colors.BRIGHT_BLUE),  # files
+                        Colors.colorize(str(row[3]), Colors.BRIGHT_YELLOW)  # lines
+                    ]
+                    colored_data.append(colored_row)
+                
+                # Print table
+                count_text = Colors.colorize(str(len(targets)), Colors.BRIGHT_GREEN, bold=True)
+                click.echo(f"Found {count_text} fixup targets:")
+                table_output = tabulate(colored_data, headers=headers, tablefmt="simple", stralign="left")
+                click.echo(table_output)
             else:
                 creator.status()
             
