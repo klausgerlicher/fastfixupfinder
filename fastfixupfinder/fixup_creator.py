@@ -2,10 +2,12 @@
 
 import subprocess
 import tempfile
+import shutil
 from pathlib import Path
 from typing import List, Optional
 
 import git
+from tabulate import tabulate
 
 from .git_analyzer import FixupTarget, GitAnalyzer, ChangeClassification
 
@@ -590,72 +592,158 @@ class FixupCreator:
                 print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
                 return
         
-        # Header with emoji and color
+        if show_diff:
+            # Show diff table format
+            self._show_diff_table(fixup_targets)
+        else:
+            # Show regular format
+            # Header with emoji and color
+            count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
+            print(f"🎯 Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}:")
+            print()
+            
+            for i, target in enumerate(fixup_targets, 1):
+                short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
+                commit_msg = Colors.colorize(target.commit_message, Colors.WHITE, bold=True)
+                print(f"• {short_hash}: {commit_msg}")
+                
+                # Author in dim color
+                author_text = Colors.colorize(f"  👤 Author: {target.author}", Colors.DIM)
+                print(author_text)
+                
+                # Files with emoji and count
+                files_list = ', '.join(sorted(target.files))
+                file_count = len(target.files)
+                files_text = Colors.colorize(f"  📁 File{'s' if file_count != 1 else ''}: {files_list}", Colors.BLUE)
+                print(files_text)
+                
+                # Changed lines with emoji
+                lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
+                print(f"  📝 Changed lines: {lines_count}")
+                
+                # Show some example changes with colored symbols
+                if target.changed_lines:
+                    print(Colors.colorize("  📋 Sample changes:", Colors.MAGENTA))
+                    for line in target.changed_lines[:3]:  # Show first 3 changes
+                        change_type = line.change_type
+                        if change_type == "added":
+                            symbol = Colors.colorize("+", Colors.BRIGHT_GREEN, bold=True)
+                        elif change_type == "deleted":
+                            symbol = Colors.colorize("-", Colors.BRIGHT_RED, bold=True)
+                        else:  # modified
+                            symbol = Colors.colorize("~", Colors.BRIGHT_YELLOW, bold=True)
+                        
+                        file_line = Colors.colorize(f"{line.file_path}:{line.line_number}", Colors.CYAN)
+                        print(f"    {symbol} {file_line}")
+                    
+                    if len(target.changed_lines) > 3:
+                        more_text = Colors.colorize(f"    ... and {len(target.changed_lines) - 3} more", Colors.DIM)
+                        print(more_text)
+                
+                print()
+    
+    def _show_diff_table(self, fixup_targets: List[FixupTarget]) -> None:
+        """Show fixup targets in a table format with diff context."""
+        if not fixup_targets:
+            return
+        
+        # Get terminal width for diff column truncation
+        terminal_width = shutil.get_terminal_size().columns
+        
+        # Calculate available width for diff column (subtract space for other columns and padding)
+        # Index(3) + SHA(8) + Subject(~40) + separators(~10) = ~61 chars
+        diff_width = max(30, terminal_width - 65)
+        
+        table_data = []
+        
+        for i, target in enumerate(fixup_targets, 1):
+            # Get truncated commit subject (first line only)
+            subject = target.commit_message.split('\n')[0]
+            if len(subject) > 40:
+                subject = subject[:37] + "..."
+            
+            # Generate compact diff for this target
+            diff_content = self._get_compact_diff(target, diff_width)
+            
+            table_data.append([
+                str(i),
+                target.commit_hash[:8],
+                subject,
+                diff_content
+            ])
+        
+        # Create colored headers
+        headers = [
+            Colors.colorize("Index", Colors.BRIGHT_MAGENTA, bold=True),
+            Colors.colorize("SHA", Colors.BRIGHT_CYAN, bold=True),
+            Colors.colorize("Subject", Colors.WHITE, bold=True),
+            Colors.colorize("Diff", Colors.BRIGHT_YELLOW, bold=True)
+        ]
+        
+        # Print header
         count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
         print(f"🎯 Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}:")
         print()
         
-        for i, target in enumerate(fixup_targets, 1):
-            short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
-            commit_msg = Colors.colorize(target.commit_message, Colors.WHITE, bold=True)
-            print(f"• {short_hash}: {commit_msg}")
+        # Print table
+        table_output = tabulate(table_data, headers=headers, tablefmt="grid", stralign="left")
+        print(table_output)
+    
+    def _get_compact_diff(self, target: FixupTarget, max_width: int) -> str:
+        """Generate a compact diff representation for table display."""
+        diff_lines = []
+        
+        # Use the changed lines that are already part of this target
+        target_changes = target.changed_lines
+        
+        if not target_changes:
+            return "No changes"
+        
+        # Group changes by file
+        by_file = {}
+        for change in target_changes:
+            if change.file_path not in by_file:
+                by_file[change.file_path] = []
+            by_file[change.file_path].append(change)
+        
+        # Generate compact diff representation
+        for file_path, changes in sorted(by_file.items()):
+            file_name = Path(file_path).name
             
-            # Author in dim color
-            author_text = Colors.colorize(f"  👤 Author: {target.author}", Colors.DIM)
-            print(author_text)
-            
-            # Files with emoji and count
-            files_list = ', '.join(sorted(target.files))
-            file_count = len(target.files)
-            files_text = Colors.colorize(f"  📁 File{'s' if file_count != 1 else ''}: {files_list}", Colors.BLUE)
-            print(files_text)
-            
-            # Changed lines with emoji
-            lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
-            print(f"  📝 Changed lines: {lines_count}")
-            
-            # Show some example changes with colored symbols
-            if target.changed_lines:
-                print(Colors.colorize("  📋 Sample changes:", Colors.MAGENTA))
-                for line in target.changed_lines[:3]:  # Show first 3 changes
-                    change_type = line.change_type
-                    if change_type == "added":
-                        symbol = Colors.colorize("+", Colors.BRIGHT_GREEN, bold=True)
-                    elif change_type == "deleted":
-                        symbol = Colors.colorize("-", Colors.BRIGHT_RED, bold=True)
-                    else:  # modified
-                        symbol = Colors.colorize("~", Colors.BRIGHT_YELLOW, bold=True)
-                    
-                    file_line = Colors.colorize(f"{line.file_path}:{line.line_number}", Colors.CYAN)
-                    print(f"    {symbol} {file_line}")
+            for change in changes[:3]:  # Show max 3 changes per file
+                # Format: filename:line +/- content
+                if change.change_type == "added":
+                    symbol = Colors.colorize("+", Colors.BRIGHT_GREEN, bold=True)
+                elif change.change_type == "deleted":
+                    symbol = Colors.colorize("-", Colors.BRIGHT_RED, bold=True)
+                else:  # modified
+                    symbol = Colors.colorize("~", Colors.BRIGHT_YELLOW, bold=True)
                 
-                if len(target.changed_lines) > 3:
-                    more_text = Colors.colorize(f"    ... and {len(target.changed_lines) - 3} more", Colors.DIM)
-                    print(more_text)
+                line_ref = Colors.colorize(f"{file_name}:{change.line_number}", Colors.CYAN)
+                content = change.content.strip()
+                
+                # Truncate content to fit in available space
+                available_for_content = max_width - len(f"{file_name}:{change.line_number} ") - 5
+                if len(content) > available_for_content:
+                    content = content[:available_for_content-3] + "..."
+                
+                diff_lines.append(f"{symbol} {line_ref} {content}")
             
-            # Show diff context if requested
-            if show_diff:
-                diff_context = self.analyzer.get_diff_context(target)
-                if diff_context:
-                    print()
-                    # Apply colors to diff output
-                    for line in diff_context.split('\n'):
-                        if line.startswith('📋') or line.startswith('📝'):
-                            print(Colors.colorize(f"  {line}", Colors.BRIGHT_CYAN))
-                        elif line.startswith('🔍'):
-                            print(Colors.colorize(f"  {line}", Colors.BRIGHT_MAGENTA))
-                        elif line.startswith('    +++') or line.startswith('    ---'):
-                            print(Colors.colorize(line, Colors.CYAN))
-                        elif line.startswith('    @@'):
-                            print(Colors.colorize(line, Colors.BRIGHT_YELLOW))
-                        elif line.startswith('    +'):
-                            print(Colors.colorize(line, Colors.BRIGHT_GREEN))
-                        elif line.startswith('    -'):
-                            print(Colors.colorize(line, Colors.BRIGHT_RED))
-                        else:
-                            print(line)
-            
-            print()
+            # Add truncation notice if there are more changes
+            if len(changes) > 3:
+                more_count = len(changes) - 3
+                diff_lines.append(Colors.colorize(f"... {more_count} more in {file_name}", Colors.DIM))
+        
+        # Join all diff lines and truncate if needed
+        result = "\n".join(diff_lines)
+        if len(result) > max_width * 3:  # Allow up to 3 lines worth
+            result = result[:max_width * 3 - 3] + "..."
+        
+        return result
+    
+    def get_changed_lines(self) -> List['ChangedLine']:
+        """Get current changed lines from analyzer."""
+        return self.analyzer.get_changed_lines()
     
     def status_oneline(self) -> None:
         """Show current status of potential fixup targets in compact one-line format."""
