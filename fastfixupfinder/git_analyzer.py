@@ -389,15 +389,21 @@ class GitAnalyzer:
             return BlameInfo(
                 commit_hash=commit_hash,
                 commit_message=commit.message.strip(),
-                author=str(commit.author),
+                author=f"{commit.author.name} <{commit.author.email}>",
                 line_content=line_content
             )
         
         except git.exc.GitCommandError:
             return None
     
-    def find_fixup_targets(self, filter_mode: FilterMode = FilterMode.SMART_DEFAULT) -> List[FixupTarget]:
-        """Find all potential fixup targets based on current changes."""
+    def find_fixup_targets(self, filter_mode: FilterMode = FilterMode.SMART_DEFAULT, org_email_pattern: Optional[str] = None) -> List[FixupTarget]:
+        """Find all potential fixup targets based on current changes.
+        
+        Args:
+            filter_mode: How to filter the results (SMART_DEFAULT, FIXUPS_ONLY, INCLUDE_ALL)
+            org_email_pattern: Regex pattern to match organization emails. Only commits by authors 
+                              matching this pattern will be considered for fixups. If None, all authors are included.
+        """
         changed_lines = self.get_changed_lines()
         
         # Group changed lines by their original commits
@@ -440,17 +446,102 @@ class GitAnalyzer:
                 fixup_targets.append(FixupTarget(
                     commit_hash=commit_hash,
                     commit_message=commit.message.strip(),
-                    author=str(commit.author),
+                    author=f"{commit.author.name} <{commit.author.email}>",
                     changed_lines=lines,
                     files=files
                 ))
             except git.exc.BadName:
                 continue
         
+        # Apply organization email filtering if specified
+        if org_email_pattern:
+            fixup_targets = self._filter_targets_by_organization(fixup_targets, org_email_pattern)
+        
         # Apply filtering based on filter mode
         filtered_targets = self._filter_targets_by_mode(fixup_targets, filter_mode)
         
         return filtered_targets
+    
+    def _filter_targets_by_organization(self, targets: List[FixupTarget], org_email_pattern: str) -> List[FixupTarget]:
+        """Filter targets to only include commits by authors matching the organization email pattern.
+        
+        Args:
+            targets: List of fixup targets to filter
+            org_email_pattern: Regex pattern to match against author email addresses
+            
+        Returns:
+            Filtered list containing only targets where author email matches the pattern
+            
+        Raises:
+            ValueError: If email pattern is invalid or matches no authors in repository
+        """
+        try:
+            pattern = re.compile(org_email_pattern, re.IGNORECASE)
+        except re.error as e:
+            raise ValueError(f"Invalid email pattern '{org_email_pattern}': {e}")
+        
+        # First, check if the pattern matches ANY authors in the repository at all
+        all_authors_in_repo = self._get_all_repository_authors()
+        pattern_matches_any_author = any(
+            self._extract_email_from_author(author) and pattern.search(self._extract_email_from_author(author))
+            for author in all_authors_in_repo
+        )
+        
+        if not pattern_matches_any_author:
+            author_count = len(all_authors_in_repo)
+            raise ValueError(f"Email pattern '{org_email_pattern}' does not match any of the {author_count} authors in repository.")
+        
+        filtered_targets = []
+        for target in targets:
+            # Extract email from author string (format is usually "Name <email>")
+            author_email = self._extract_email_from_author(target.author)
+            if author_email and pattern.search(author_email):
+                filtered_targets.append(target)
+        
+        return filtered_targets
+    
+    def _get_all_repository_authors(self) -> List[str]:
+        """Get all unique authors in the repository.
+        
+        Returns:
+            List of author strings in "Name <email>" format
+        """
+        authors = set()
+        try:
+            # Get all commits and collect unique authors
+            for commit in self.repo.iter_commits():
+                author_str = f"{commit.author.name} <{commit.author.email}>"
+                authors.add(author_str)
+        except Exception:
+            # If we can't get commits, return empty list
+            pass
+        
+        return sorted(list(authors))
+    
+    def _extract_email_from_author(self, author_str: str) -> Optional[str]:
+        """Extract email address from author string.
+        
+        Author strings are typically in format "Name <email>" or just "email".
+        
+        Args:
+            author_str: Author string from git commit
+            
+        Returns:
+            Email address if found, None otherwise
+        """
+        # Match email in angle brackets: "Name <email@domain.com>"
+        email_match = re.search(r'<([^>]+)>', author_str)
+        if email_match:
+            return email_match.group(1)
+        
+        # If no angle brackets, check if the whole string looks like an email
+        if '@' in author_str and '.' in author_str:
+            # Simple check if it's just an email address
+            email_match = re.search(r'\S+@\S+\.\S+', author_str)
+            if email_match:
+                return email_match.group(0)
+        
+        return None
     
     def _filter_targets_by_mode(self, targets: List[FixupTarget], filter_mode: FilterMode) -> List[FixupTarget]:
         """Filter fixup targets based on the specified filter mode."""

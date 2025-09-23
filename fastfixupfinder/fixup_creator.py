@@ -43,15 +43,22 @@ class Colors:
 class FixupCreator:
     """Creates fixup commits automatically."""
     
-    def __init__(self, repo_path: str = "."):
-        """Initialize with repository path."""
+    def __init__(self, repo_path: str = ".", org_email_pattern: Optional[str] = None):
+        """Initialize with repository path and optional organization email pattern.
+        
+        Args:
+            repo_path: Path to the git repository
+            org_email_pattern: Regex pattern to match organization emails. Only commits by authors 
+                              matching this pattern will be considered for fixups.
+        """
         self.repo = git.Repo(repo_path)
         self.repo_path = Path(repo_path)
         self.analyzer = GitAnalyzer(repo_path)
+        self.org_email_pattern = org_email_pattern
     
     def create_fixup_commits(self, dry_run: bool = False, auto_backup: bool = True) -> List[str]:
         """Create fixup commits for all identified targets."""
-        fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
+        fixup_targets = self.analyzer.find_fixup_targets(org_email_pattern=self.org_email_pattern)  # Uses SMART_DEFAULT
         created_commits = []
         
         if not fixup_targets:
@@ -128,7 +135,7 @@ class FixupCreator:
             compact_mode: Use compact output for better readability with many changes
             dry_run: Show what would be done without making changes
         """
-        fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
+        fixup_targets = self.analyzer.find_fixup_targets(org_email_pattern=self.org_email_pattern)  # Uses SMART_DEFAULT
         created_commits = []
         
         if not fixup_targets:
@@ -533,7 +540,7 @@ class FixupCreator:
     
     def status(self) -> None:
         """Show current status of potential fixup targets."""
-        fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
+        fixup_targets = self.analyzer.find_fixup_targets(org_email_pattern=self.org_email_pattern)  # Uses SMART_DEFAULT
         
         if not fixup_targets:
             print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
@@ -587,7 +594,7 @@ class FixupCreator:
     
     def status_oneline(self) -> None:
         """Show current status of potential fixup targets in compact one-line format."""
-        fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
+        fixup_targets = self.analyzer.find_fixup_targets(org_email_pattern=self.org_email_pattern)  # Uses SMART_DEFAULT
         
         if not fixup_targets:
             print(Colors.colorize("No fixup targets found.", Colors.YELLOW))

@@ -28,7 +28,8 @@ if __name__ == '__main__':
 @click.option('--detailed', is_flag=True, help='Show detailed analysis of changes and target commits')
 @click.option('--fixups-only', is_flag=True, help='Only show high-confidence fixup targets')
 @click.option('--include-all', is_flag=True, help='Include all changes regardless of fixup likelihood')
-def status(repo, oneline, detailed, fixups_only, include_all):
+@click.option('--org-email', type=str, help='Regex pattern to match organization emails. Only commits by authors matching this pattern will be considered for fixups.')
+def status(repo, oneline, detailed, fixups_only, include_all, org_email):
     """Show current fixup targets without making any changes."""
     try:
         # Determine filter mode from flags
@@ -42,8 +43,8 @@ def status(repo, oneline, detailed, fixups_only, include_all):
         else:
             filter_mode = FilterMode.SMART_DEFAULT
         
-        creator = FixupCreator(repo)
-        targets = creator.analyzer.find_fixup_targets(filter_mode)
+        creator = FixupCreator(repo, org_email_pattern=org_email)
+        targets = creator.analyzer.find_fixup_targets(filter_mode, org_email_pattern=org_email)
         
         if not targets:
             if oneline:
@@ -227,10 +228,11 @@ def status(repo, oneline, detailed, fixups_only, include_all):
 @click.option('--interactive', '-i', is_flag=True, help='Interactively select targets with line-level control')
 @click.option('--oneline', is_flag=True, help='Use compact output in interactive mode')
 @click.option('--no-backup', is_flag=True, help='Skip automatic safety backup')
-def create(repo, dry_run, interactive, oneline, no_backup):
+@click.option('--org-email', type=str, help='Regex pattern to match organization emails. Only commits by authors matching this pattern will be considered for fixups.')
+def create(repo, dry_run, interactive, oneline, no_backup, org_email):
     """Create fixup commits for identified targets."""
     try:
-        creator = FixupCreator(repo)
+        creator = FixupCreator(repo, org_email_pattern=org_email)
         
         if interactive:
             created_commits = creator.interactive_fixup_selection(compact_mode=oneline, dry_run=dry_run)
@@ -282,10 +284,14 @@ def restore(repo, backup_name):
 
 @main.command()
 @click.option('--repo', type=click.Path(exists=True, file_okay=False, dir_okay=True), default='.', help='Path to git repository (default: current directory)')
-def gui(repo):
+@click.option('--org-email', type=str, help='Regex pattern to match organization emails. Only commits by authors matching this pattern will be considered for fixups.')
+def gui(repo, org_email):
     """Launch visual GUI for drag-and-drop fixup assignment."""
     try:
         from .gui import run_gui
+        # TODO: Add org_email support to GUI
+        if org_email:
+            click.echo(Colors.colorize("⚠️ Warning: --org-email option is not yet supported in GUI mode", Colors.YELLOW))
         run_gui(repo)
     except ImportError:
         click.echo(Colors.colorize("❌ Error: GUI requires textual support", Colors.BRIGHT_RED), err=True)
