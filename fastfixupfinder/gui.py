@@ -1,20 +1,24 @@
-"""NCurses-based GUI for visual fixup assignment."""
+"""Rich + Textual-based GUI for visual fixup assignment."""
 
-import curses
-import curses.panel
-from dataclasses import dataclass
-from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set
 from pathlib import Path
+
+from textual.app import App, ComposeResult
+from textual.containers import Container, Horizontal, Vertical
+from textual.widgets import (
+    Button, DataTable, Footer, Header, Label, ListItem, ListView, 
+    Static, TabbedContent, TabPane
+)
+from textual.binding import Binding
+from textual.message import Message
+from textual.reactive import reactive
+from rich.text import Text
+from rich.console import Console
+from rich.table import Table as RichTable
 
 from .git_analyzer import GitAnalyzer, FixupTarget, ChangedLine, ChangeClassification
 from .fixup_creator import FixupCreator
-
-
-class Panel(Enum):
-    """Active panel in the GUI."""
-    CHANGES = "changes"
-    TARGETS = "targets"
 
 
 @dataclass
@@ -24,32 +28,175 @@ class Assignment:
     target_hash: str
 
 
-@dataclass
-class GUIState:
-    """Current state of the GUI."""
-    active_panel: Panel = Panel.CHANGES
-    selected_change_idx: int = 0
-    selected_target_idx: int = 0
-    scroll_changes: int = 0
-    scroll_targets: int = 0
-    assignments: List[Assignment] = None
-    expanded_files: Set[str] = None
-    expanded_targets: Set[str] = None
+class ChangeItem(ListItem):
+    """Custom list item for displaying changes."""
     
-    def __post_init__(self):
-        if self.assignments is None:
-            self.assignments = []
-        if self.expanded_files is None:
-            self.expanded_files = set()
-        if self.expanded_targets is None:
-            self.expanded_targets = set()
+    def __init__(self, change: ChangedLine, *args, **kwargs):
+        self.change = change
+        super().__init__(*args, **kwargs)
+        self.update_display()
+    
+    def update_display(self):
+        """Update the visual display of this change."""
+        # Classification color mapping
+        classification_colors = {
+            ChangeClassification.LIKELY_FIXUP: "green",
+            ChangeClassification.POSSIBLE_FIXUP: "yellow", 
+            ChangeClassification.UNLIKELY_FIXUP: "red",
+            ChangeClassification.NEW_FILE: "magenta"
+        }
+        
+        # Change type symbol
+        symbol_map = {
+            "added": "[green]+[/green]",
+            "deleted": "[red]-[/red]", 
+            "modified": "[yellow]~[/yellow]"
+        }
+        
+        symbol = symbol_map.get(self.change.change_type, "?")
+        color = classification_colors.get(self.change.classification, "white")
+        
+        # Format the display text
+        file_path = Path(self.change.file_path).name  # Just filename
+        content_preview = self.change.content[:50] + "..." if len(self.change.content) > 50 else self.change.content
+        
+        # Create rich text
+        text = Text()
+        text.append(f"{symbol} ", style="bold")
+        text.append(f"{file_path}:{self.change.line_number} ", style="cyan")
+        text.append(f"{content_preview} ", style="white")
+        text.append(f"[{self.change.classification.value.replace('_', ' ').title()}]", style=color)
+        
+        self.update(text)
 
 
-class FixupGUI:
-    """NCurses-based GUI for visual fixup assignment."""
+class TargetItem(ListItem):
+    """Custom list item for displaying fixup targets."""
     
-    def __init__(self, repo_path: str = "."):
-        """Initialize the GUI with repository path."""
+    def __init__(self, target: FixupTarget, assignment_count: int = 0, *args, **kwargs):
+        self.target = target
+        self.assignment_count = assignment_count
+        super().__init__(*args, **kwargs)
+        self.update_display()
+    
+    def update_display(self):
+        """Update the visual display of this target."""
+        # Truncate long commit messages
+        message = self.target.commit_message
+        if len(message) > 60:
+            message = message[:57] + "..."
+        
+        # Create rich text
+        text = Text()
+        text.append(f"{self.target.commit_hash[:8]} ", style="bright_cyan bold")
+        text.append(f"{message} ", style="white bold")
+        
+        if self.assignment_count > 0:
+            text.append(f"({self.assignment_count} assigned)", style="green")
+        else:
+            text.append(f"({len(self.target.changed_lines)} changes)", style="dim")
+        
+        self.update(text)
+
+
+class PreviewPanel(Static):
+    """Panel showing current assignments and preview of commands."""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.assignments: List[Assignment] = []
+    
+    def update_assignments(self, assignments: List[Assignment]):
+        """Update the assignments and refresh display."""
+        self.assignments = assignments
+        self.update_display()
+    
+    def update_display(self):
+        """Update the preview display."""
+        if not self.assignments:
+            self.update("No assignments yet. Select changes and press 'a' to assign to selected target.")
+            return
+        
+        # Group assignments by target
+        by_target: Dict[str, List[Assignment]] = {}
+        for assignment in self.assignments:
+            if assignment.target_hash not in by_target:
+                by_target[assignment.target_hash] = []
+            by_target[assignment.target_hash].append(assignment)
+        
+        # Create preview text
+        console = Console()
+        with console.capture() as capture:
+            console.print("📋 [bold white]Current Assignments:[/bold white]")
+            console.print()
+            
+            for target_hash, target_assignments in by_target.items():
+                files = set(a.change.file_path for a in target_assignments)
+                console.print(f"🎯 [bright_cyan]{target_hash[:8]}[/bright_cyan]: [green]{len(target_assignments)}[/green] changes in [blue]{len(files)}[/blue] files")
+                
+                # Show files
+                for file_path in sorted(files):
+                    file_assignments = [a for a in target_assignments if a.change.file_path == file_path]
+                    console.print(f"  📄 [cyan]{Path(file_path).name}[/cyan]: {len(file_assignments)} changes")
+            
+            console.print()
+            console.print("🚀 [bold white]Commands that will be run:[/bold white]")
+            for target_hash in by_target.keys():
+                console.print(f"  git commit --fixup {target_hash[:8]}")
+        
+        self.update(capture.get())
+
+
+class FixupGUI(App):
+    """Textual-based GUI for visual fixup assignment."""
+    
+    CSS = """
+    #left-panel {
+        width: 1fr;
+        border: solid $primary;
+    }
+    
+    #right-panel {
+        width: 1fr;
+        border: solid $secondary;
+    }
+    
+    #preview-panel {
+        height: 30%;
+        border: solid $accent;
+    }
+    
+    #main-container {
+        height: 70%;
+    }
+    
+    ListView {
+        border: solid $surface;
+    }
+    
+    .focused {
+        border: solid $warning;
+    }
+    
+    .section-header {
+        background: $primary;
+        color: $text;
+        padding: 0 1;
+        text-align: center;
+    }
+    """
+    
+    BINDINGS = [
+        Binding("q", "quit", "Quit"),
+        Binding("tab", "switch_focus", "Switch Panel"),
+        Binding("a", "assign", "Assign to Target"),
+        Binding("u", "unassign", "Unassign"),
+        Binding("c", "create_commits", "Create Fixup Commits"),
+        Binding("r", "refresh", "Refresh Data"),
+    ]
+    
+    def __init__(self, repo_path: str = ".", **kwargs):
+        super().__init__(**kwargs)
         self.repo_path = repo_path
         self.analyzer = GitAnalyzer(repo_path)
         self.creator = FixupCreator(repo_path)
@@ -57,638 +204,241 @@ class FixupGUI:
         # Data
         self.changes: List[ChangedLine] = []
         self.targets: List[FixupTarget] = []
-        self.files_changes: Dict[str, List[ChangedLine]] = {}
+        self.assignments: List[Assignment] = []
         
-        # GUI state
-        self.state = GUIState()
+        # UI state
+        self.focused_panel = "changes"  # "changes" or "targets"
+    
+    def compose(self) -> ComposeResult:
+        """Create the UI layout."""
+        yield Header()
         
-        # NCurses objects
-        self.stdscr = None
-        self.changes_win = None
-        self.targets_win = None
-        self.preview_win = None
-        self.status_win = None
-        self.changes_panel = None
-        self.targets_panel = None
-        self.preview_panel = None
+        with Container(id="main-container"):
+            with Horizontal():
+                with Vertical(id="left-panel"):
+                    yield Label("📝 Changes", classes="section-header")
+                    yield ListView(id="changes-list")
+                
+                with Vertical(id="right-panel"):
+                    yield Label("🎯 Fixup Targets", classes="section-header")
+                    yield ListView(id="targets-list")
         
-        # Colors
-        self.colors = {}
+        with Container(id="preview-panel"):
+            yield Label("👁️ Preview", classes="section-header")
+            yield PreviewPanel(id="preview")
         
-    def load_data(self):
-        """Load changes and fixup targets from the repository."""
-        self.changes = self.analyzer.get_changed_lines()
+        yield Footer()
+    
+    def on_mount(self) -> None:
+        """Initialize the app when mounted."""
+        self.load_data()
+        self.update_ui()
+        self.focus_changes_panel()
+    
+    def load_data(self) -> None:
+        """Load changes and targets from the repository."""
+        # Get all changes (not just fixup targets)
         self.targets = self.analyzer.find_fixup_targets()
         
+        # Get all changed lines
+        all_changes = []
+        for target in self.targets:
+            all_changes.extend(target.changed_lines)
+        
+        # Remove duplicates (can happen with overlapping targets)
+        seen = set()
+        self.changes = []
+        for change in all_changes:
+            key = (change.file_path, change.line_number, change.content)
+            if key not in seen:
+                seen.add(key)
+                self.changes.append(change)
+    
+    def update_ui(self) -> None:
+        """Update all UI elements with current data."""
+        self.update_changes_list()
+        self.update_targets_list()
+        self.update_preview()
+    
+    def update_changes_list(self) -> None:
+        """Update the changes list view."""
+        changes_list = self.query_one("#changes-list", ListView)
+        changes_list.clear()
+        
         # Group changes by file
-        self.files_changes = {}
+        by_file: Dict[str, List[ChangedLine]] = {}
         for change in self.changes:
-            if change.file_path not in self.files_changes:
-                self.files_changes[change.file_path] = []
-            self.files_changes[change.file_path].append(change)
+            if change.file_path not in by_file:
+                by_file[change.file_path] = []
+            by_file[change.file_path].append(change)
         
-        # Expand all files by default
-        self.state.expanded_files = set(self.files_changes.keys())
-        self.state.expanded_targets = {target.commit_hash for target in self.targets}
-    
-    def init_colors(self):
-        """Initialize color pairs for the GUI."""
-        curses.start_color()
-        curses.use_default_colors()
-        
-        # Color pairs
-        curses.init_pair(1, curses.COLOR_GREEN, -1)    # LIKELY_FIXUP
-        curses.init_pair(2, curses.COLOR_YELLOW, -1)   # POSSIBLE_FIXUP
-        curses.init_pair(3, curses.COLOR_RED, -1)      # UNLIKELY_FIXUP
-        curses.init_pair(4, curses.COLOR_MAGENTA, -1)  # NEW_FILE
-        curses.init_pair(5, curses.COLOR_BLUE, -1)     # ASSIGNED
-        curses.init_pair(6, curses.COLOR_CYAN, -1)     # HEADER
-        curses.init_pair(7, curses.COLOR_WHITE, curses.COLOR_BLUE)  # SELECTED
-        
-        self.colors = {
-            'likely': curses.color_pair(1),
-            'possible': curses.color_pair(2),
-            'unlikely': curses.color_pair(3),
-            'new_file': curses.color_pair(4),
-            'assigned': curses.color_pair(5),
-            'header': curses.color_pair(6),
-            'selected': curses.color_pair(7),
-            'normal': curses.color_pair(0)
-        }
-    
-    def setup_windows(self):
-        """Set up the main windows and panels."""
-        height, width = self.stdscr.getmaxyx()
-        
-        # Create windows
-        # Header (1 line)
-        header_height = 1
-        
-        # Preview panel (bottom, 6 lines)
-        preview_height = 6
-        
-        # Status bar (2 lines)
-        status_height = 2
-        
-        # Main content area
-        content_height = height - header_height - preview_height - status_height
-        content_width = width
-        
-        # Split content area into two panels
-        panel_width = content_width // 2
-        
-        # Changes panel (left)
-        self.changes_win = curses.newwin(
-            content_height, panel_width, 
-            header_height, 0
-        )
-        
-        # Targets panel (right)
-        self.targets_win = curses.newwin(
-            content_height, panel_width, 
-            header_height, panel_width
-        )
-        
-        # Preview panel (bottom)
-        self.preview_win = curses.newwin(
-            preview_height, width,
-            header_height + content_height, 0
-        )
-        
-        # Status window (bottom)
-        self.status_win = curses.newwin(
-            status_height, width,
-            height - status_height, 0
-        )
-        
-        # Create panels for layering
-        self.changes_panel = curses.panel.new_panel(self.changes_win)
-        self.targets_panel = curses.panel.new_panel(self.targets_win)
-        self.preview_panel = curses.panel.new_panel(self.preview_win)
-        
-        # Enable keypad for special keys
-        self.changes_win.keypad(True)
-        self.targets_win.keypad(True)
-        self.stdscr.keypad(True)
-    
-    def draw_header(self):
-        """Draw the header with title and help."""
-        height, width = self.stdscr.getmaxyx()
-        title = "Fast Fixup Finder - Visual Assignment Mode"
-        help_text = "[q]uit [h]elp [TAB] switch [c]reate"
-        
-        # Clear header area
-        self.stdscr.addstr(0, 0, " " * width)
-        
-        # Title (left)
-        self.stdscr.addstr(0, 2, title, self.colors['header'] | curses.A_BOLD)
-        
-        # Help (right)
-        help_x = width - len(help_text) - 2
-        if help_x > len(title) + 4:
-            self.stdscr.addstr(0, help_x, help_text, self.colors['normal'])
-        
-        # Separator line
-        self.stdscr.hline(1, 0, curses.ACS_HLINE, width)
-    
-    def draw_changes_panel(self):
-        """Draw the left panel with changes."""
-        self.changes_win.clear()
-        self.changes_win.box()
-        
-        height, width = self.changes_win.getmaxyx()
-        
-        # Panel title
-        title = "CHANGES (Unassigned)"
-        self.changes_win.addstr(0, 2, f" {title} ", self.colors['header'] | curses.A_BOLD)
-        
-        # Panel highlight if active
-        if self.state.active_panel == Panel.CHANGES:
-            self.changes_win.attron(curses.A_BOLD)
-            self.changes_win.box()
-            self.changes_win.attroff(curses.A_BOLD)
-        
-        # Content area
-        content_y = 2
-        content_height = height - 3  # Account for box and instructions
-        y = content_y
-        
-        if not self.files_changes:
-            self.changes_win.addstr(y, 2, "No changes found", self.colors['normal'])
-            self.changes_win.refresh()
-            return
-        
-        # Draw file groups and changes
-        current_item = 0
-        for file_path, file_changes in self.files_changes.items():
-            if y >= content_height + content_y - 1:
-                break
-            
+        # Add file headers and changes
+        for file_path, file_changes in sorted(by_file.items()):
             # File header
-            expanded = file_path in self.state.expanded_files
-            expand_char = "▼" if expanded else "▶"
+            file_header = ListItem(Label(f"📄 {file_path} ({len(file_changes)} changes)", 
+                                       markup=True), classes="file-header")
+            changes_list.append(file_header)
             
-            # Highlight if this is the selected item
-            attr = self.colors['selected'] if (
-                self.state.active_panel == Panel.CHANGES and 
-                current_item == self.state.selected_change_idx
-            ) else self.colors['header']
-            
-            file_display = f"{expand_char} File: {Path(file_path).name}"
-            if len(file_display) > width - 4:
-                file_display = file_display[:width-7] + "..."
-            
-            self.changes_win.addstr(y, 2, file_display, attr | curses.A_BOLD)
-            y += 1
-            current_item += 1
-            
-            # File changes (if expanded)
-            if expanded:
-                for change in file_changes:
-                    if y >= content_height + content_y - 1:
-                        break
-                    
-                    # Check if change is assigned
-                    is_assigned = any(a.change == change for a in self.state.assignments)
-                    
-                    # Classification color
-                    if is_assigned:
-                        color = self.colors['assigned']
-                    else:
-                        color_map = {
-                            ChangeClassification.LIKELY_FIXUP: self.colors['likely'],
-                            ChangeClassification.POSSIBLE_FIXUP: self.colors['possible'],
-                            ChangeClassification.UNLIKELY_FIXUP: self.colors['unlikely'],
-                            ChangeClassification.NEW_FILE: self.colors['new_file']
-                        }
-                        color = color_map.get(change.classification, self.colors['normal'])
-                    
-                    # Highlight if selected
-                    if (self.state.active_panel == Panel.CHANGES and 
-                        current_item == self.state.selected_change_idx):
-                        color = self.colors['selected']
-                    
-                    # Change type symbol
-                    symbol_map = {'+': '+', '-': '-', 'modified': '~', 'added': '+', 'deleted': '-'}
-                    symbol = symbol_map.get(change.change_type, '?')
-                    
-                    # Format change line
-                    status_char = "●" if is_assigned else "○"
-                    content_preview = change.content.strip()[:width-15] + ("..." if len(change.content.strip()) > width-15 else "")
-                    
-                    change_line = f"  {status_char} {symbol} L{change.line_number}: {content_preview}"
-                    self.changes_win.addstr(y, 2, change_line[:width-4], color)
-                    y += 1
-                    current_item += 1
-        
-        # Instructions at bottom
-        if y < content_height + content_y - 2:
-            instructions = [
-                "[ENTER] Assign to target",
-                "[TAB] Switch panels", 
-                "[↑↓] Navigate"
-            ]
-            for i, instruction in enumerate(instructions):
-                if content_height + content_y - 2 + i < height - 1:
-                    self.changes_win.addstr(content_height + content_y - 2 + i, 2, 
-                                          instruction, self.colors['normal'])
-        
-        self.changes_win.refresh()
+            # Changes in this file
+            for change in file_changes:
+                changes_list.append(ChangeItem(change))
     
-    def draw_targets_panel(self):
-        """Draw the right panel with fixup targets."""
-        self.targets_win.clear()
-        self.targets_win.box()
+    def update_targets_list(self) -> None:
+        """Update the targets list view."""
+        targets_list = self.query_one("#targets-list", ListView)
+        targets_list.clear()
         
-        height, width = self.targets_win.getmaxyx()
+        for target in self.targets:
+            # Count assignments for this target
+            assignment_count = sum(1 for a in self.assignments if a.target_hash == target.commit_hash)
+            targets_list.append(TargetItem(target, assignment_count))
+    
+    def update_preview(self) -> None:
+        """Update the preview panel."""
+        preview = self.query_one("#preview", PreviewPanel)
+        preview.update_assignments(self.assignments)
+    
+    def focus_changes_panel(self) -> None:
+        """Focus the changes panel."""
+        self.focused_panel = "changes"
+        changes_list = self.query_one("#changes-list", ListView)
+        changes_list.focus()
+        changes_list.add_class("focused")
         
-        # Panel title
-        title = "FIXUP TARGETS"
-        self.targets_win.addstr(0, 2, f" {title} ", self.colors['header'] | curses.A_BOLD)
+        targets_list = self.query_one("#targets-list", ListView)
+        targets_list.remove_class("focused")
+    
+    def focus_targets_panel(self) -> None:
+        """Focus the targets panel."""
+        self.focused_panel = "targets"
+        targets_list = self.query_one("#targets-list", ListView)
+        targets_list.focus()
+        targets_list.add_class("focused")
         
-        # Panel highlight if active
-        if self.state.active_panel == Panel.TARGETS:
-            self.targets_win.attron(curses.A_BOLD)
-            self.targets_win.box()
-            self.targets_win.attroff(curses.A_BOLD)
-        
-        # Content area
-        content_y = 2
-        content_height = height - 3
-        y = content_y
-        
-        if not self.targets:
-            self.targets_win.addstr(y, 2, "No fixup targets found", self.colors['normal'])
-            self.targets_win.refresh()
+        changes_list = self.query_one("#changes-list", ListView)
+        changes_list.remove_class("focused")
+    
+    def action_switch_focus(self) -> None:
+        """Switch focus between panels."""
+        if self.focused_panel == "changes":
+            self.focus_targets_panel()
+        else:
+            self.focus_changes_panel()
+    
+    def action_assign(self) -> None:
+        """Assign selected change to selected target."""
+        if self.focused_panel != "changes":
             return
         
-        # Draw targets
-        for i, target in enumerate(self.targets):
-            if y >= content_height + content_y - 1:
-                break
-            
-            # Target header
-            expanded = target.commit_hash in self.state.expanded_targets
-            expand_char = "▼" if expanded else "▶"
-            
-            # Highlight if selected
-            attr = self.colors['selected'] if (
-                self.state.active_panel == Panel.TARGETS and 
-                i == self.state.selected_target_idx
-            ) else self.colors['header']
-            
-            # Count assigned changes
-            assigned_count = len([a for a in self.state.assignments 
-                                if a.target_hash == target.commit_hash])
-            
-            short_hash = target.commit_hash[:8]
-            message = target.commit_message[:width-25] + ("..." if len(target.commit_message) > width-25 else "")
-            target_display = f"{expand_char} {short_hash}: {message}"
-            
-            if assigned_count > 0:
-                target_display += f" ({assigned_count})"
-            
-            self.targets_win.addstr(y, 2, target_display[:width-4], attr | curses.A_BOLD)
-            y += 1
-            
-            # Target details (if expanded)
-            if expanded:
-                # Author
-                if y < content_height + content_y - 1:
-                    author_line = f"  👤 {target.author}"
-                    self.targets_win.addstr(y, 2, author_line[:width-4], self.colors['normal'])
-                    y += 1
-                
-                # Assigned changes
-                if y < content_height + content_y - 1:
-                    assigned_changes = [a.change for a in self.state.assignments 
-                                      if a.target_hash == target.commit_hash]
-                    
-                    if assigned_changes:
-                        self.targets_win.addstr(y, 2, "  📋 Assigned:", self.colors['normal'])
-                        y += 1
-                        
-                        for change in assigned_changes[:3]:  # Show first 3
-                            if y >= content_height + content_y - 1:
-                                break
-                            change_summary = f"    • {Path(change.file_path).name}:{change.line_number}"
-                            self.targets_win.addstr(y, 2, change_summary[:width-4], 
-                                                  self.colors['assigned'])
-                            y += 1
-                        
-                        if len(assigned_changes) > 3:
-                            if y < content_height + content_y - 1:
-                                more_text = f"    ... and {len(assigned_changes) - 3} more"
-                                self.targets_win.addstr(y, 2, more_text, self.colors['normal'])
-                                y += 1
-                    else:
-                        self.targets_win.addstr(y, 2, "  📋 (no assignments)", 
-                                              self.colors['normal'])
-                        y += 1
-                
-                if y < content_height + content_y - 1:
-                    y += 1  # Spacing
+        changes_list = self.query_one("#changes-list", ListView)
+        targets_list = self.query_one("#targets-list", ListView)
         
-        self.targets_win.refresh()
-    
-    def draw_preview_panel(self):
-        """Draw the preview panel showing assignments and commands."""
-        self.preview_win.clear()
-        self.preview_win.box()
-        
-        height, width = self.preview_win.getmaxyx()
-        
-        # Panel title
-        title = "PREVIEW - Selected Assignments & Commands"
-        self.preview_win.addstr(0, 2, f" {title} ", self.colors['header'] | curses.A_BOLD)
-        
-        # Content area
-        content_y = 1
-        y = content_y
-        
-        if not self.state.assignments:
-            self.preview_win.addstr(y + 1, 2, "No assignments selected", self.colors['normal'])
-            self.preview_win.addstr(y + 2, 2, "Press ENTER to assign changes to targets", self.colors['normal'])
-            self.preview_win.refresh()
+        if changes_list.index is None or targets_list.index is None:
             return
         
-        # Group assignments by target for display
-        target_assignments = {}
-        for assignment in self.state.assignments:
-            if assignment.target_hash not in target_assignments:
-                target_assignments[assignment.target_hash] = []
-            target_assignments[assignment.target_hash].append(assignment.change)
+        # Get selected items
+        selected_change_item = changes_list.children[changes_list.index]
+        selected_target_item = targets_list.children[targets_list.index]
         
-        # Show assignment summary
-        y += 1
-        assignment_count = len(self.state.assignments)
-        target_count = len(target_assignments)
-        summary = f"📋 {assignment_count} changes assigned to {target_count} targets:"
-        self.preview_win.addstr(y, 2, summary, self.colors['header'])
-        y += 1
+        # Skip file headers
+        if not isinstance(selected_change_item, ChangeItem) or not isinstance(selected_target_item, TargetItem):
+            return
         
-        # Show assignments (limited to fit in panel)
-        max_display = 2  # Max targets to show in preview
-        displayed = 0
+        change = selected_change_item.change
+        target = selected_target_item.target
         
-        for target_hash, changes in target_assignments.items():
-            if y >= height - 2 or displayed >= max_display:
-                if len(target_assignments) > max_display:
-                    remaining = len(target_assignments) - max_display
-                    more_text = f"  ... and {remaining} more targets"
-                    self.preview_win.addstr(y, 2, more_text, self.colors['normal'])
-                break
-            
-            # Find target info
-            target = next((t for t in self.targets if t.commit_hash == target_hash), None)
-            if target:
-                short_hash = target_hash[:8]
-                message = target.commit_message[:30] + "..." if len(target.commit_message) > 30 else target.commit_message
-                target_line = f"  • {short_hash}: {message} ({len(changes)} changes)"
-                self.preview_win.addstr(y, 2, target_line[:width-4], self.colors['assigned'])
-                y += 1
-                displayed += 1
+        # Check if already assigned
+        existing = next((a for a in self.assignments 
+                        if a.change == change and a.target_hash == target.commit_hash), None)
+        if existing:
+            return
         
-        # Show command preview if assignments exist
-        if y < height - 2:
-            y += 1
-            command_header = "🚀 Commands that will be executed:"
-            self.preview_win.addstr(y, 2, command_header, self.colors['header'])
-            
-            if y + 1 < height - 1:
-                # Show the key commands
-                commands = [
-                    "git add .",
-                    f"git commit -m 'fixup! <target_message>' (×{len(target_assignments)})",
-                    "git rebase -i --autosquash <base_commit>"
-                ]
-                
-                for i, cmd in enumerate(commands):
-                    if y + 1 + i < height - 1:
-                        self.preview_win.addstr(y + 1 + i, 4, f"{i+1}. {cmd}"[:width-6], 
-                                              self.colors['normal'])
-        
-        self.preview_win.refresh()
-    
-    def draw_status_bar(self):
-        """Draw the status bar with counts and actions."""
-        self.status_win.clear()
-        height, width = self.status_win.getmaxyx()
-        
-        # Top border
-        self.status_win.hline(0, 0, curses.ACS_HLINE, width)
-        
-        # Status information
-        unassigned_count = len([c for c in self.changes 
-                              if not any(a.change == c for a in self.state.assignments)])
-        assigned_count = len(self.state.assignments)
-        target_count = len(self.targets)
-        
-        status_left = f"Status: {unassigned_count} unassigned, {assigned_count} assigned, {target_count} targets"
-        status_right = "[c]reate fixups [r]eset [s]ave [q]uit"
-        
-        # Left status
-        self.status_win.addstr(1, 2, status_left, self.colors['normal'])
-        
-        # Right actions
-        status_right_x = width - len(status_right) - 2
-        if status_right_x > len(status_left) + 4:
-            self.status_win.addstr(1, status_right_x, status_right, self.colors['normal'])
-        
-        self.status_win.refresh()
-    
-    def get_current_change(self) -> Optional[ChangedLine]:
-        """Get the currently selected change."""
-        if self.state.active_panel != Panel.CHANGES:
-            return None
-        
-        current_item = 0
-        for file_path, file_changes in self.files_changes.items():
-            if current_item == self.state.selected_change_idx:
-                return None  # Selected file header, not a change
-            current_item += 1
-            
-            if file_path in self.state.expanded_files:
-                for change in file_changes:
-                    if current_item == self.state.selected_change_idx:
-                        return change
-                    current_item += 1
-        
-        return None
-    
-    def get_current_target(self) -> Optional[FixupTarget]:
-        """Get the currently selected target."""
-        if (self.state.active_panel != Panel.TARGETS or 
-            self.state.selected_target_idx >= len(self.targets)):
-            return None
-        return self.targets[self.state.selected_target_idx]
-    
-    def assign_change_to_target(self, change: ChangedLine, target: FixupTarget):
-        """Assign a change to a fixup target."""
-        # Remove any existing assignment for this change
-        self.state.assignments = [a for a in self.state.assignments if a.change != change]
-        
-        # Add new assignment
+        # Create assignment
         assignment = Assignment(change=change, target_hash=target.commit_hash)
-        self.state.assignments.append(assignment)
+        self.assignments.append(assignment)
+        
+        # Update UI
+        self.update_targets_list()
+        self.update_preview()
     
-    def handle_key(self, key: int) -> bool:
-        """Handle keyboard input. Returns False to quit."""
-        if key == ord('q') or key == ord('Q'):
-            return False
+    def action_unassign(self) -> None:
+        """Unassign selected change."""
+        if self.focused_panel != "changes":
+            return
         
-        elif key == ord('h') or key == ord('H'):
-            self.show_help()
+        changes_list = self.query_one("#changes-list", ListView)
+        if changes_list.index is None:
+            return
         
-        elif key == ord('\t') or key == 9:  # TAB
-            if self.state.active_panel == Panel.CHANGES:
-                self.state.active_panel = Panel.TARGETS
-                self.state.selected_target_idx = min(self.state.selected_target_idx, 
-                                                   len(self.targets) - 1)
-            else:
-                self.state.active_panel = Panel.CHANGES
+        selected_item = changes_list.children[changes_list.index]
+        if not isinstance(selected_item, ChangeItem):
+            return
         
-        elif key == curses.KEY_UP:
-            if self.state.active_panel == Panel.CHANGES:
-                self.state.selected_change_idx = max(0, self.state.selected_change_idx - 1)
-            else:
-                self.state.selected_target_idx = max(0, self.state.selected_target_idx - 1)
+        change = selected_item.change
         
-        elif key == curses.KEY_DOWN:
-            if self.state.active_panel == Panel.CHANGES:
-                # Count total items in changes panel
-                total_items = 0
-                for file_path, file_changes in self.files_changes.items():
-                    total_items += 1  # File header
-                    if file_path in self.state.expanded_files:
-                        total_items += len(file_changes)
-                
-                self.state.selected_change_idx = min(total_items - 1, 
-                                                   self.state.selected_change_idx + 1)
-            else:
-                self.state.selected_target_idx = min(len(self.targets) - 1, 
-                                                   self.state.selected_target_idx + 1)
+        # Remove assignments for this change
+        self.assignments = [a for a in self.assignments if a.change != change]
         
-        elif key == ord('\n') or key == curses.KEY_ENTER or key == 10:  # ENTER
-            if self.state.active_panel == Panel.CHANGES:
-                change = self.get_current_change()
-                if change and self.targets:
-                    # Switch to targets panel for assignment
-                    self.state.active_panel = Panel.TARGETS
-            elif self.state.active_panel == Panel.TARGETS:
-                # Assign current change to current target
-                change = self.get_current_change()
-                target = self.get_current_target()
-                if change and target:
-                    self.assign_change_to_target(change, target)
-        
-        elif key == ord(' '):  # SPACE - quick assign
-            change = self.get_current_change()
-            target = self.get_current_target()
-            if change and target:
-                self.assign_change_to_target(change, target)
-        
-        elif key == curses.KEY_DC or key == 127:  # DELETE
-            change = self.get_current_change()
-            if change:
-                # Remove assignment
-                self.state.assignments = [a for a in self.state.assignments if a.change != change]
-        
-        elif key == ord('c') or key == ord('C'):
-            self.create_fixups()
-        
-        elif key == ord('r') or key == ord('R'):
-            self.state.assignments.clear()
-        
-        return True
+        # Update UI
+        self.update_targets_list()
+        self.update_preview()
     
-    def show_help(self):
-        """Show help dialog."""
-        # Simple help - could be enhanced with a proper dialog
-        pass
-    
-    def create_fixups(self):
+    def action_create_commits(self) -> None:
         """Create fixup commits from current assignments."""
-        if not self.state.assignments:
+        if not self.assignments:
             return
         
         # Group assignments by target
-        target_assignments = {}
-        for assignment in self.state.assignments:
-            if assignment.target_hash not in target_assignments:
-                target_assignments[assignment.target_hash] = []
-            target_assignments[assignment.target_hash].append(assignment.change)
+        by_target: Dict[str, List[Assignment]] = {}
+        for assignment in self.assignments:
+            if assignment.target_hash not in by_target:
+                by_target[assignment.target_hash] = []
+            by_target[assignment.target_hash].append(assignment)
         
-        # Create modified FixupTarget objects with only assigned changes
-        assigned_targets = []
-        for target in self.targets:
-            if target.commit_hash in target_assignments:
-                assigned_changes = target_assignments[target.commit_hash]
-                assigned_files = {change.file_path for change in assigned_changes}
-                
-                modified_target = FixupTarget(
-                    commit_hash=target.commit_hash,
-                    commit_message=target.commit_message,
-                    author=target.author,
-                    changed_lines=assigned_changes,
-                    files=assigned_files
-                )
-                assigned_targets.append(modified_target)
+        # Create modified targets with only assigned changes
+        modified_targets = []
+        for target_hash, target_assignments in by_target.items():
+            # Find the original target
+            original_target = next((t for t in self.targets if t.commit_hash == target_hash), None)
+            if not original_target:
+                continue
+            
+            # Create new target with only assigned changes
+            assigned_changes = [a.change for a in target_assignments]
+            modified_target = FixupTarget(
+                commit_hash=original_target.commit_hash,
+                commit_message=original_target.commit_message,
+                author=original_target.author,
+                changed_lines=assigned_changes,
+                files=list(set(change.file_path for change in assigned_changes))
+            )
+            modified_targets.append(modified_target)
         
-        # Stage all changes first
-        self.creator.repo.git.add('.')
-        
-        # Create fixup commits for assigned targets
+        # Create commits
         created_commits = []
-        for target in assigned_targets:
-            commit_hash = self.creator.create_fixup_commit(target, dry_run=False)
+        for target in modified_targets:
+            commit_hash = self.creator.create_fixup_commit(target)
             if commit_hash:
                 created_commits.append(commit_hash)
         
-        # Clear assignments after successful creation
+        # Exit after creating commits
         if created_commits:
-            self.state.assignments.clear()
+            self.exit(message=f"✅ Created {len(created_commits)} fixup commits.")
+        else:
+            self.exit(message="❌ No fixup commits created.")
     
-    def run(self):
-        """Main GUI loop."""
-        def main(stdscr):
-            self.stdscr = stdscr
-            curses.curs_set(0)  # Hide cursor
-            
-            # Initialize
-            self.load_data()
-            self.init_colors()
-            self.setup_windows()
-            
-            # Main loop
-            while True:
-                # Clear and redraw
-                self.stdscr.clear()
-                self.draw_header()
-                self.draw_changes_panel()
-                self.draw_targets_panel()
-                self.draw_preview_panel()
-                self.draw_status_bar()
-                
-                # Update panels
-                curses.panel.update_panels()
-                curses.doupdate()
-                
-                # Get input
-                key = self.stdscr.getch()
-                
-                # Handle key
-                if not self.handle_key(key):
-                    break
-        
-        curses.wrapper(main)
+    def action_refresh(self) -> None:
+        """Refresh data from repository."""
+        self.assignments.clear()
+        self.load_data()
+        self.update_ui()
+    
+    def action_quit(self) -> None:
+        """Quit the application."""
+        self.exit()
 
 
-def main():
-    """Entry point for GUI mode."""
-    gui = FixupGUI()
-    gui.run()
-
-
-if __name__ == "__main__":
-    main()
+def run_gui(repo_path: str = ".") -> None:
+    """Run the Textual-based GUI."""
+    app = FixupGUI(repo_path=repo_path)
+    app.run()

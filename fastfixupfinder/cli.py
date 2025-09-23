@@ -282,11 +282,10 @@ def restore(repo, backup_name):
 def gui(repo):
     """Launch visual GUI for drag-and-drop fixup assignment."""
     try:
-        from .gui import FixupGUI
-        gui_app = FixupGUI(repo)
-        gui_app.run()
+        from .gui import run_gui
+        run_gui(repo)
     except ImportError:
-        click.echo(Colors.colorize("❌ Error: GUI requires ncurses support", Colors.BRIGHT_RED), err=True)
+        click.echo(Colors.colorize("❌ Error: GUI requires textual support", Colors.BRIGHT_RED), err=True)
         sys.exit(1)
     except Exception as e:
         click.echo(Colors.colorize(f"❌ Error: {e}", Colors.BRIGHT_RED), err=True)
