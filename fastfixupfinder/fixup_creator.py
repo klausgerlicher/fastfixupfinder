@@ -652,12 +652,12 @@ class FixupCreator:
         terminal_width = shutil.get_terminal_size().columns
         
         # Calculate dynamic column widths to use full terminal width
-        # Index column: 5 chars, SHA: 8 chars, separators and padding: ~15 chars
-        # Split remaining width between Subject and Diff columns (60% subject, 40% diff)
-        fixed_width = 5 + 8 + 15  # Index + SHA + padding/separators
-        available_width = max(60, terminal_width - fixed_width)
-        subject_width = int(available_width * 0.6)
-        diff_width = int(available_width * 0.4)
+        # Index column: 5 chars, SHA: 8 chars, separators and padding: ~12 chars
+        # Split remaining width between Subject and Diff columns (50% subject, 50% diff)
+        fixed_width = 5 + 8 + 12  # Index + SHA + padding/separators  
+        available_width = max(80, terminal_width - fixed_width)
+        subject_width = int(available_width * 0.5)
+        diff_width = int(available_width * 0.5)
         
         table_data = []
         
@@ -698,6 +698,7 @@ class FixupCreator:
         """Generate a compact diff representation for table display with context lines."""
         diff_lines = []
         
+        
         # Use the changed lines that are already part of this target
         target_changes = target.changed_lines
         
@@ -719,9 +720,10 @@ class FixupCreator:
             
             # Read current file content for context
             try:
-                with open(self.repo_path / file_path, 'r', encoding='utf-8', errors='replace') as f:
+                full_path = self.repo_path / file_path
+                with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
                     file_lines = f.readlines()
-            except (FileNotFoundError, UnicodeDecodeError):
+            except (FileNotFoundError, UnicodeDecodeError) as e:
                 # Fallback to simple format if file can't be read
                 unique_changes = []
                 for change in changes:
