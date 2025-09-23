@@ -44,14 +44,28 @@ def status(repo, oneline, detailed, fixups_only, include_all, org_email):
             filter_mode = FilterMode.SMART_DEFAULT
         
         creator = FixupCreator(repo, org_email_pattern=org_email)
-        targets = creator.analyzer.find_fixup_targets(filter_mode, org_email_pattern=org_email)
+        
+        # Get all targets first, then apply org filtering if needed
+        all_targets = creator.analyzer.find_fixup_targets(filter_mode)
+        if org_email:
+            targets = creator.analyzer.filter_targets_by_organization(all_targets, org_email)
+        else:
+            targets = all_targets
         
         if not targets:
-            if oneline:
-                click.echo(Colors.colorize("No fixup targets found.", Colors.YELLOW))
+            if org_email and all_targets:
+                # We have targets but none match the org email pattern
+                if oneline:
+                    click.echo(Colors.colorize(f"Found {len(all_targets)} fixup targets, but none match organization email pattern '{org_email}'.", Colors.YELLOW))
+                else:
+                    click.echo(Colors.colorize(f"🔍 Found {len(all_targets)} fixup targets, but none match organization email pattern '{org_email}'.", Colors.YELLOW))
             else:
-                click.echo(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
-                click.echo(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
+                # No targets at all or no org filter
+                if oneline:
+                    click.echo(Colors.colorize("No fixup targets found.", Colors.YELLOW))
+                else:
+                    click.echo(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
+                    click.echo(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
             return
         
         if detailed:

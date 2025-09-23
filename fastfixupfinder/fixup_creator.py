@@ -58,13 +58,26 @@ class FixupCreator:
     
     def create_fixup_commits(self, dry_run: bool = False, auto_backup: bool = True) -> List[str]:
         """Create fixup commits for all identified targets."""
-        fixup_targets = self.analyzer.find_fixup_targets(org_email_pattern=self.org_email_pattern)  # Uses SMART_DEFAULT
+        # Get all fixup targets first
+        all_fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         created_commits = []
         
-        if not fixup_targets:
-            print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
-            print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
-            return created_commits
+        # Apply organization filtering if specified
+        if self.org_email_pattern:
+            fixup_targets = self.analyzer.filter_targets_by_organization(all_fixup_targets, self.org_email_pattern)
+            if not fixup_targets:
+                if all_fixup_targets:
+                    print(Colors.colorize(f"🔍 Found {len(all_fixup_targets)} fixup targets, but none match organization email pattern '{self.org_email_pattern}'.", Colors.YELLOW))
+                else:
+                    print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
+                    print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
+                return created_commits
+        else:
+            fixup_targets = all_fixup_targets
+            if not fixup_targets:
+                print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
+                print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
+                return created_commits
         
         # Store target commits for later rebase suggestion
         self._target_commits = [target.commit_hash for target in fixup_targets]
@@ -135,13 +148,26 @@ class FixupCreator:
             compact_mode: Use compact output for better readability with many changes
             dry_run: Show what would be done without making changes
         """
-        fixup_targets = self.analyzer.find_fixup_targets(org_email_pattern=self.org_email_pattern)  # Uses SMART_DEFAULT
+        # Get all fixup targets first
+        all_fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         created_commits = []
         
-        if not fixup_targets:
-            print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
-            print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
-            return created_commits
+        # Apply organization filtering if specified
+        if self.org_email_pattern:
+            fixup_targets = self.analyzer.filter_targets_by_organization(all_fixup_targets, self.org_email_pattern)
+            if not fixup_targets:
+                if all_fixup_targets:
+                    print(Colors.colorize(f"🔍 Found {len(all_fixup_targets)} fixup targets, but none match organization email pattern '{self.org_email_pattern}'.", Colors.YELLOW))
+                else:
+                    print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
+                    print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
+                return created_commits
+        else:
+            fixup_targets = all_fixup_targets
+            if not fixup_targets:
+                print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
+                print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
+                return created_commits
         
         count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
         if compact_mode:
@@ -540,12 +566,25 @@ class FixupCreator:
     
     def status(self) -> None:
         """Show current status of potential fixup targets."""
-        fixup_targets = self.analyzer.find_fixup_targets(org_email_pattern=self.org_email_pattern)  # Uses SMART_DEFAULT
+        # Get all fixup targets first
+        all_fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         
-        if not fixup_targets:
-            print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
-            print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
-            return
+        # Apply organization filtering if specified
+        if self.org_email_pattern:
+            fixup_targets = self.analyzer.filter_targets_by_organization(all_fixup_targets, self.org_email_pattern)
+            if not fixup_targets:
+                if all_fixup_targets:
+                    print(Colors.colorize(f"🔍 Found {len(all_fixup_targets)} fixup targets, but none match organization email pattern '{self.org_email_pattern}'.", Colors.YELLOW))
+                else:
+                    print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
+                    print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
+                return
+        else:
+            fixup_targets = all_fixup_targets
+            if not fixup_targets:
+                print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
+                print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
+                return
         
         # Header with emoji and color
         count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
@@ -594,11 +633,23 @@ class FixupCreator:
     
     def status_oneline(self) -> None:
         """Show current status of potential fixup targets in compact one-line format."""
-        fixup_targets = self.analyzer.find_fixup_targets(org_email_pattern=self.org_email_pattern)  # Uses SMART_DEFAULT
+        # Get all fixup targets first
+        all_fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         
-        if not fixup_targets:
-            print(Colors.colorize("No fixup targets found.", Colors.YELLOW))
-            return
+        # Apply organization filtering if specified
+        if self.org_email_pattern:
+            fixup_targets = self.analyzer.filter_targets_by_organization(all_fixup_targets, self.org_email_pattern)
+            if not fixup_targets:
+                if all_fixup_targets:
+                    print(Colors.colorize(f"Found {len(all_fixup_targets)} fixup targets, but none match organization email pattern '{self.org_email_pattern}'.", Colors.YELLOW))
+                else:
+                    print(Colors.colorize("No fixup targets found.", Colors.YELLOW))
+                return
+        else:
+            fixup_targets = all_fixup_targets
+            if not fixup_targets:
+                print(Colors.colorize("No fixup targets found.", Colors.YELLOW))
+                return
         
         # Simple header for oneline mode
         count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
