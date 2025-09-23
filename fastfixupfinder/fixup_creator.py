@@ -650,17 +650,21 @@ class FixupCreator:
         # Get terminal width for diff column truncation
         terminal_width = shutil.get_terminal_size().columns
         
-        # Calculate available width for diff column (subtract space for other columns and padding)
-        # Index(3) + SHA(8) + Subject(~40) + separators(~10) = ~61 chars
-        diff_width = max(30, terminal_width - 65)
+        # Calculate dynamic column widths to use full terminal width
+        # Index column: 5 chars, SHA: 8 chars, separators and padding: ~15 chars
+        # Split remaining width between Subject and Diff columns (60% subject, 40% diff)
+        fixed_width = 5 + 8 + 15  # Index + SHA + padding/separators
+        available_width = max(60, terminal_width - fixed_width)
+        subject_width = int(available_width * 0.6)
+        diff_width = int(available_width * 0.4)
         
         table_data = []
         
         for i, target in enumerate(fixup_targets, 1):
             # Get truncated commit subject (first line only)
             subject = target.commit_message.split('\n')[0]
-            if len(subject) > 40:
-                subject = subject[:37] + "..."
+            if len(subject) > subject_width:
+                subject = subject[:subject_width-3] + "..."
             
             # Generate compact diff for this target
             diff_content = self._get_compact_diff(target, diff_width)
@@ -707,10 +711,20 @@ class FixupCreator:
             by_file[change.file_path].append(change)
         
         # Generate compact diff representation
+        seen_lines = set()  # Track already seen diff lines to avoid duplicates
+        
         for file_path, changes in sorted(by_file.items()):
             file_name = Path(file_path).name
             
-            for change in changes[:3]:  # Show max 3 changes per file
+            unique_changes = []
+            for change in changes:
+                # Create a unique key for deduplication
+                change_key = (change.file_path, change.line_number, change.change_type, change.content.strip())
+                if change_key not in seen_lines:
+                    seen_lines.add(change_key)
+                    unique_changes.append(change)
+            
+            for change in unique_changes[:3]:  # Show max 3 unique changes per file
                 # Format: filename:line +/- content
                 if change.change_type == "added":
                     symbol = Colors.colorize("+", Colors.BRIGHT_GREEN, bold=True)
@@ -730,8 +744,8 @@ class FixupCreator:
                 diff_lines.append(f"{symbol} {line_ref} {content}")
             
             # Add truncation notice if there are more changes
-            if len(changes) > 3:
-                more_count = len(changes) - 3
+            if len(unique_changes) > 3:
+                more_count = len(unique_changes) - 3
                 diff_lines.append(Colors.colorize(f"... {more_count} more in {file_name}", Colors.DIM))
         
         # Join all diff lines and truncate if needed
