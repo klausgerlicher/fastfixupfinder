@@ -751,8 +751,15 @@ class FixupCreator:
                     seen_lines.add(change_key)
                     unique_changes.append(change)
             
-            # Show context around first change (limit to 1 change per file for table compactness)
+            # Show filename header once
             if unique_changes:
+                # Add file header
+                file_header = Colors.colorize(f"📁 {file_name}", Colors.BRIGHT_BLUE, bold=True)
+                diff_lines.append(file_header)
+                
+                # Create mini-table for this file's changes
+                file_table_lines = []
+                
                 change = unique_changes[0]
                 line_num = change.line_number - 1  # Convert to 0-based index
                 
@@ -760,7 +767,7 @@ class FixupCreator:
                 start_line = max(0, line_num - context_lines)
                 end_line = min(len(file_lines), line_num + context_lines + 1)
                 
-                # Build context diff
+                # Build context diff without filename repetition
                 for i in range(start_line, end_line):
                     current_line = file_lines[i].rstrip()
                     line_number = i + 1
@@ -778,21 +785,24 @@ class FixupCreator:
                         # Context line
                         symbol = Colors.colorize(" ", Colors.DIM)
                     
-                    line_ref = Colors.colorize(f"{file_name}:{line_number}", Colors.CYAN)
+                    line_ref = Colors.colorize(f"{line_number:>3}", Colors.CYAN)
                     
-                    # Truncate content to fit in available space
-                    available_for_content = max_width - len(f"{file_name}:{line_number} ") - 5
+                    # Truncate content to fit in available space (more space without filename)
+                    available_for_content = max_width - 8  # 3 for line number + 5 for symbols/padding
                     if len(current_line) > available_for_content:
                         content = current_line[:available_for_content-3] + "..."
                     else:
                         content = current_line
                     
-                    diff_lines.append(f"{symbol} {line_ref} {content}")
+                    file_table_lines.append(f"  {symbol} {line_ref} │ {content}")
+                
+                # Add all lines for this file
+                diff_lines.extend(file_table_lines)
                 
                 # Add notice if there are more changes in this file
                 if len(unique_changes) > 1:
                     more_count = len(unique_changes) - 1
-                    diff_lines.append(Colors.colorize(f"... {more_count} more in {file_name}", Colors.DIM))
+                    diff_lines.append(Colors.colorize(f"  ... {more_count} more changes", Colors.DIM))
         
         # Join all diff lines and truncate if needed for table display
         result = "\n".join(diff_lines)
