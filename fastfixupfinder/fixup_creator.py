@@ -753,7 +753,7 @@ class FixupCreator:
             
             # Show filename header once
             if unique_changes:
-                # Add file header
+                # Add file header with proper indentation to align with code lines  
                 file_header = Colors.colorize(f"📁 {file_name}", Colors.BRIGHT_BLUE, bold=True)
                 diff_lines.append(file_header)
                 
