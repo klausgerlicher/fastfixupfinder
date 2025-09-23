@@ -121,11 +121,12 @@ class FixupCreator:
             print(error_msg)
             return None
     
-    def interactive_fixup_selection(self, compact_mode: bool = False) -> List[str]:
+    def interactive_fixup_selection(self, compact_mode: bool = False, dry_run: bool = False) -> List[str]:
         """Interactively select which fixup commits to create with line-level control.
         
         Args:
             compact_mode: Use compact output for better readability with many changes
+            dry_run: Show what would be done without making changes
         """
         fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         created_commits = []
@@ -163,12 +164,13 @@ class FixupCreator:
         # Store target commits for later rebase suggestion
         self._target_commits = [target.commit_hash for target in final_targets]
         
-        # Stage all changes first
-        self.repo.git.add('.')
+        # Stage all changes first (skip in dry-run mode)
+        if not dry_run:
+            self.repo.git.add('.')
         
         # Create selected fixup commits
         for target in final_targets:
-            commit_hash = self.create_fixup_commit(target)
+            commit_hash = self.create_fixup_commit(target, dry_run)
             if commit_hash:
                 created_commits.append(commit_hash)
         

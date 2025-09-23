@@ -103,3 +103,7 @@ mypy .                          # Type checking
 ## Best Practices
 
 - Always ask me before a push
+
+## Development Tips
+
+- Use bash "reset" because the mouse pointer mode may be spilling silly escape chars after testing

@@ -233,7 +233,7 @@ def create(repo, dry_run, interactive, oneline, no_backup):
         creator = FixupCreator(repo)
         
         if interactive:
-            created_commits = creator.interactive_fixup_selection(compact_mode=oneline)
+            created_commits = creator.interactive_fixup_selection(compact_mode=oneline, dry_run=dry_run)
         else:
             created_commits = creator.create_fixup_commits(dry_run, auto_backup=not no_backup)
         
