@@ -544,6 +544,69 @@ class GitAnalyzer:
         
         return None
     
+    def get_diff_context(self, target: 'FixupTarget', context_lines: int = 3) -> Optional[str]:
+        """Get diff context showing what changes would fix in the target commit.
+        
+        Args:
+            target: The fixup target to show context for
+            context_lines: Number of context lines to show around changes
+            
+        Returns:
+            Formatted diff string showing the changes, or None if unable to generate
+        """
+        try:
+            # Get the diff for files that have changes in both current working dir and target commit
+            target_files = target.files
+            current_changes = self.get_changed_lines()
+            current_files = {change.file_path for change in current_changes if change.file_path in target_files}
+            
+            if not current_files:
+                return None
+            
+            diff_output = []
+            diff_output.append(f"📋 Diff context for fixup target {target.commit_hash[:8]}:")
+            diff_output.append(f"📝 Target commit: {target.commit_message}")
+            diff_output.append("")
+            
+            for file_path in sorted(current_files):
+                # Get the version of the file at the target commit
+                try:
+                    target_commit = self.repo.commit(target.commit_hash)
+                    target_blob = target_commit.tree[file_path]
+                    target_content = target_blob.data_stream.read().decode('utf-8', errors='replace')
+                except (KeyError, UnicodeDecodeError):
+                    continue
+                
+                # Get current working directory version
+                try:
+                    with open(self.repo_path / file_path, 'r', encoding='utf-8', errors='replace') as f:
+                        current_content = f.read()
+                except (FileNotFoundError, UnicodeDecodeError):
+                    continue
+                
+                # Generate unified diff
+                target_lines = target_content.splitlines(keepends=True)
+                current_lines = current_content.splitlines(keepends=True)
+                
+                diff_lines = list(difflib.unified_diff(
+                    target_lines,
+                    current_lines,
+                    fromfile=f"a/{file_path} (target commit {target.commit_hash[:8]})",
+                    tofile=f"b/{file_path} (current changes)",
+                    n=context_lines
+                ))
+                
+                if diff_lines:
+                    diff_output.append(f"🔍 {file_path}:")
+                    for line in diff_lines[2:]:  # Skip the file headers
+                        diff_output.append(f"    {line.rstrip()}")
+                    diff_output.append("")
+            
+            return '\n'.join(diff_output) if len(diff_output) > 3 else None
+            
+        except Exception:
+            return None
+    
     def _filter_targets_by_mode(self, targets: List[FixupTarget], filter_mode: FilterMode) -> List[FixupTarget]:
         """Filter fixup targets based on the specified filter mode."""
         if filter_mode == FilterMode.INCLUDE_ALL:

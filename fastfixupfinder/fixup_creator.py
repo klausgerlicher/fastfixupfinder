@@ -564,8 +564,12 @@ class FixupCreator:
             print(error_msg)
             return False
     
-    def status(self) -> None:
-        """Show current status of potential fixup targets."""
+    def status(self, show_diff: bool = False) -> None:
+        """Show current status of potential fixup targets.
+        
+        Args:
+            show_diff: Whether to show diff context for each target
+        """
         # Get all fixup targets first
         all_fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         
@@ -628,6 +632,28 @@ class FixupCreator:
                 if len(target.changed_lines) > 3:
                     more_text = Colors.colorize(f"    ... and {len(target.changed_lines) - 3} more", Colors.DIM)
                     print(more_text)
+            
+            # Show diff context if requested
+            if show_diff:
+                diff_context = self.analyzer.get_diff_context(target)
+                if diff_context:
+                    print()
+                    # Apply colors to diff output
+                    for line in diff_context.split('\n'):
+                        if line.startswith('📋') or line.startswith('📝'):
+                            print(Colors.colorize(f"  {line}", Colors.BRIGHT_CYAN))
+                        elif line.startswith('🔍'):
+                            print(Colors.colorize(f"  {line}", Colors.BRIGHT_MAGENTA))
+                        elif line.startswith('    +++') or line.startswith('    ---'):
+                            print(Colors.colorize(line, Colors.CYAN))
+                        elif line.startswith('    @@'):
+                            print(Colors.colorize(line, Colors.BRIGHT_YELLOW))
+                        elif line.startswith('    +'):
+                            print(Colors.colorize(line, Colors.BRIGHT_GREEN))
+                        elif line.startswith('    -'):
+                            print(Colors.colorize(line, Colors.BRIGHT_RED))
+                        else:
+                            print(line)
             
             print()
     
