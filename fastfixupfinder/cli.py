@@ -244,7 +244,10 @@ def create(repo, dry_run, interactive, oneline, no_backup):
             creator.suggest_rebase_command(created_commits)
         elif dry_run:
             dry_run_msg = Colors.colorize("🔍 Dry run completed.", Colors.BRIGHT_CYAN, bold=True)
-            hint_msg = Colors.colorize("Use --interactive or remove --dry-run to create commits.", Colors.DIM)
+            if interactive:
+                hint_msg = Colors.colorize("Remove --dry-run to create commits.", Colors.DIM)
+            else:
+                hint_msg = Colors.colorize("Use --interactive or remove --dry-run to create commits.", Colors.DIM)
             click.echo(f"{dry_run_msg} {hint_msg}")
         
     except Exception as e:
