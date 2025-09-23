@@ -33,24 +33,29 @@ class ChangeItem(ListItem):
     
     def __init__(self, change: ChangedLine, *args, **kwargs):
         self.change = change
-        super().__init__(*args, **kwargs)
-        self.update_display()
+        
+        # Create the display text
+        display_text = self._create_display_text()
+        
+        # Create a label with the formatted text
+        label = Label(display_text, markup=True)
+        super().__init__(label, *args, **kwargs)
     
-    def update_display(self):
-        """Update the visual display of this change."""
+    def _create_display_text(self) -> str:
+        """Create the display text for this change."""
+        # Change type symbol
+        symbol_map = {
+            "added": "[green]+[/green]",
+            "deleted": "[red]-[/red]", 
+            "modified": "[yellow]~[/yellow]"
+        }
+        
         # Classification color mapping
         classification_colors = {
             ChangeClassification.LIKELY_FIXUP: "green",
             ChangeClassification.POSSIBLE_FIXUP: "yellow", 
             ChangeClassification.UNLIKELY_FIXUP: "red",
             ChangeClassification.NEW_FILE: "magenta"
-        }
-        
-        # Change type symbol
-        symbol_map = {
-            "added": "[green]+[/green]",
-            "deleted": "[red]-[/red]", 
-            "modified": "[yellow]~[/yellow]"
         }
         
         symbol = symbol_map.get(self.change.change_type, "?")
@@ -60,14 +65,9 @@ class ChangeItem(ListItem):
         file_path = Path(self.change.file_path).name  # Just filename
         content_preview = self.change.content[:50] + "..." if len(self.change.content) > 50 else self.change.content
         
-        # Create rich text
-        text = Text()
-        text.append(f"{symbol} ", style="bold")
-        text.append(f"{file_path}:{self.change.line_number} ", style="cyan")
-        text.append(f"{content_preview} ", style="white")
-        text.append(f"[{self.change.classification.value.replace('_', ' ').title()}]", style=color)
+        classification_text = self.change.classification.value.replace('_', ' ').title()
         
-        self.update(text)
+        return f"{symbol} [cyan]{file_path}:{self.change.line_number}[/cyan] {content_preview} [bold {color}][{classification_text}][/bold {color}]"
 
 
 class TargetItem(ListItem):
@@ -76,27 +76,28 @@ class TargetItem(ListItem):
     def __init__(self, target: FixupTarget, assignment_count: int = 0, *args, **kwargs):
         self.target = target
         self.assignment_count = assignment_count
-        super().__init__(*args, **kwargs)
-        self.update_display()
+        
+        # Create the display text
+        display_text = self._create_display_text()
+        
+        # Create a label with the formatted text
+        label = Label(display_text, markup=True)
+        super().__init__(label, *args, **kwargs)
     
-    def update_display(self):
-        """Update the visual display of this target."""
+    def _create_display_text(self) -> str:
+        """Create the display text for this target."""
         # Truncate long commit messages
         message = self.target.commit_message
         if len(message) > 60:
             message = message[:57] + "..."
         
-        # Create rich text
-        text = Text()
-        text.append(f"{self.target.commit_hash[:8]} ", style="bright_cyan bold")
-        text.append(f"{message} ", style="white bold")
-        
+        # Format the display text
         if self.assignment_count > 0:
-            text.append(f"({self.assignment_count} assigned)", style="green")
+            count_text = f"[green]({self.assignment_count} assigned)[/green]"
         else:
-            text.append(f"({len(self.target.changed_lines)} changes)", style="dim")
+            count_text = f"[dim]({len(self.target.changed_lines)} changes)[/dim]"
         
-        self.update(text)
+        return f"[bright_cyan bold]{self.target.commit_hash[:8]}[/bright_cyan bold] [white bold]{message}[/white bold] {count_text}"
 
 
 class PreviewPanel(Static):
