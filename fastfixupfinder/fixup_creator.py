@@ -566,11 +566,12 @@ class FixupCreator:
             print(error_msg)
             return False
     
-    def status(self, show_diff: bool = False) -> None:
+    def status(self, show_diff: bool = False, context_lines: int = 4) -> None:
         """Show current status of potential fixup targets.
         
         Args:
             show_diff: Whether to show diff context for each target
+            context_lines: Number of context lines to show around changes in diff
         """
         # Get all fixup targets first
         all_fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
@@ -594,7 +595,7 @@ class FixupCreator:
         
         if show_diff:
             # Show diff table format
-            self._show_diff_table(fixup_targets)
+            self._show_diff_table(fixup_targets, context_lines)
         else:
             # Show regular format
             # Header with emoji and color
@@ -642,7 +643,7 @@ class FixupCreator:
                 
                 print()
     
-    def _show_diff_table(self, fixup_targets: List[FixupTarget]) -> None:
+    def _show_diff_table(self, fixup_targets: List[FixupTarget], context_lines: int = 4) -> None:
         """Show fixup targets in a table format with diff context."""
         if not fixup_targets:
             return
@@ -667,7 +668,7 @@ class FixupCreator:
                 subject = subject[:subject_width-3] + "..."
             
             # Generate compact diff for this target
-            diff_content = self._get_compact_diff(target, diff_width)
+            diff_content = self._get_compact_diff(target, diff_width, context_lines)
             
             table_data.append([
                 str(i),
@@ -693,8 +694,8 @@ class FixupCreator:
         table_output = tabulate(table_data, headers=headers, tablefmt="grid", stralign="left")
         print(table_output)
     
-    def _get_compact_diff(self, target: FixupTarget, max_width: int) -> str:
-        """Generate a compact diff representation for table display."""
+    def _get_compact_diff(self, target: FixupTarget, max_width: int, context_lines: int = 4) -> str:
+        """Generate a compact diff representation for table display with context lines."""
         diff_lines = []
         
         # Use the changed lines that are already part of this target
@@ -710,48 +711,94 @@ class FixupCreator:
                 by_file[change.file_path] = []
             by_file[change.file_path].append(change)
         
-        # Generate compact diff representation
+        # Generate compact diff representation with context
         seen_lines = set()  # Track already seen diff lines to avoid duplicates
         
         for file_path, changes in sorted(by_file.items()):
             file_name = Path(file_path).name
             
+            # Read current file content for context
+            try:
+                with open(self.repo_path / file_path, 'r', encoding='utf-8', errors='replace') as f:
+                    file_lines = f.readlines()
+            except (FileNotFoundError, UnicodeDecodeError):
+                # Fallback to simple format if file can't be read
+                unique_changes = []
+                for change in changes:
+                    change_key = (change.file_path, change.line_number, change.change_type, change.content.strip())
+                    if change_key not in seen_lines:
+                        seen_lines.add(change_key)
+                        unique_changes.append(change)
+                
+                for change in unique_changes[:2]:  # Limit to 2 when no context
+                    symbol = "+" if change.change_type == "added" else "-" if change.change_type == "deleted" else "~"
+                    symbol = Colors.colorize(symbol, Colors.BRIGHT_GREEN if change.change_type == "added" else Colors.BRIGHT_RED if change.change_type == "deleted" else Colors.BRIGHT_YELLOW, bold=True)
+                    line_ref = Colors.colorize(f"{file_name}:{change.line_number}", Colors.CYAN)
+                    content = change.content.strip()
+                    available_for_content = max_width - len(f"{file_name}:{change.line_number} ") - 5
+                    if len(content) > available_for_content:
+                        content = content[:available_for_content-3] + "..."
+                    diff_lines.append(f"{symbol} {line_ref} {content}")
+                continue
+            
+            # Deduplicate changes
             unique_changes = []
             for change in changes:
-                # Create a unique key for deduplication
                 change_key = (change.file_path, change.line_number, change.change_type, change.content.strip())
                 if change_key not in seen_lines:
                     seen_lines.add(change_key)
                     unique_changes.append(change)
             
-            for change in unique_changes[:3]:  # Show max 3 unique changes per file
-                # Format: filename:line +/- content
-                if change.change_type == "added":
-                    symbol = Colors.colorize("+", Colors.BRIGHT_GREEN, bold=True)
-                elif change.change_type == "deleted":
-                    symbol = Colors.colorize("-", Colors.BRIGHT_RED, bold=True)
-                else:  # modified
-                    symbol = Colors.colorize("~", Colors.BRIGHT_YELLOW, bold=True)
+            # Show context around first change (limit to 1 change per file for table compactness)
+            if unique_changes:
+                change = unique_changes[0]
+                line_num = change.line_number - 1  # Convert to 0-based index
                 
-                line_ref = Colors.colorize(f"{file_name}:{change.line_number}", Colors.CYAN)
-                content = change.content.strip()
+                # Calculate context range
+                start_line = max(0, line_num - context_lines)
+                end_line = min(len(file_lines), line_num + context_lines + 1)
                 
-                # Truncate content to fit in available space
-                available_for_content = max_width - len(f"{file_name}:{change.line_number} ") - 5
-                if len(content) > available_for_content:
-                    content = content[:available_for_content-3] + "..."
+                # Build context diff
+                for i in range(start_line, end_line):
+                    current_line = file_lines[i].rstrip()
+                    line_number = i + 1
+                    
+                    # Determine if this is the changed line
+                    if line_number == change.line_number:
+                        # This is the actual changed line
+                        if change.change_type == "added":
+                            symbol = Colors.colorize("+", Colors.BRIGHT_GREEN, bold=True)
+                        elif change.change_type == "deleted":
+                            symbol = Colors.colorize("-", Colors.BRIGHT_RED, bold=True)
+                        else:  # modified
+                            symbol = Colors.colorize("~", Colors.BRIGHT_YELLOW, bold=True)
+                    else:
+                        # Context line
+                        symbol = Colors.colorize(" ", Colors.DIM)
+                    
+                    line_ref = Colors.colorize(f"{file_name}:{line_number}", Colors.CYAN)
+                    
+                    # Truncate content to fit in available space
+                    available_for_content = max_width - len(f"{file_name}:{line_number} ") - 5
+                    if len(current_line) > available_for_content:
+                        content = current_line[:available_for_content-3] + "..."
+                    else:
+                        content = current_line
+                    
+                    diff_lines.append(f"{symbol} {line_ref} {content}")
                 
-                diff_lines.append(f"{symbol} {line_ref} {content}")
-            
-            # Add truncation notice if there are more changes
-            if len(unique_changes) > 3:
-                more_count = len(unique_changes) - 3
-                diff_lines.append(Colors.colorize(f"... {more_count} more in {file_name}", Colors.DIM))
+                # Add notice if there are more changes in this file
+                if len(unique_changes) > 1:
+                    more_count = len(unique_changes) - 1
+                    diff_lines.append(Colors.colorize(f"... {more_count} more in {file_name}", Colors.DIM))
         
-        # Join all diff lines and truncate if needed
+        # Join all diff lines and truncate if needed for table display
         result = "\n".join(diff_lines)
-        if len(result) > max_width * 3:  # Allow up to 3 lines worth
-            result = result[:max_width * 3 - 3] + "..."
+        # Allow more lines for context but still limit for table readability
+        max_lines = 8  # Show up to 8 lines in table cell
+        lines = result.split('\n')
+        if len(lines) > max_lines:
+            result = '\n'.join(lines[:max_lines-1]) + '\n' + Colors.colorize(f"... {len(lines) - max_lines + 1} more lines", Colors.DIM)
         
         return result
     

@@ -30,7 +30,8 @@ if __name__ == '__main__':
 @click.option('--include-all', is_flag=True, help='Include all changes regardless of fixup likelihood')
 @click.option('--org-email', type=str, help='Regex pattern to match organization emails. Only commits by authors matching this pattern will be considered for fixups.')
 @click.option('--diff', is_flag=True, help='Show diff context between current changes and fixup targets')
-def status(repo, oneline, detailed, fixups_only, include_all, org_email, diff):
+@click.option('--context', type=int, default=4, help='Number of context lines to show around changes in diff (default: 4)')
+def status(repo, oneline, detailed, fixups_only, include_all, org_email, diff, context):
     """Show current fixup targets without making any changes."""
     try:
         # Determine filter mode from flags
@@ -229,7 +230,7 @@ def status(repo, oneline, detailed, fixups_only, include_all, org_email, diff):
                 table_output = tabulate(colored_data, headers=headers, tablefmt="simple", stralign="left")
                 click.echo(table_output)
             else:
-                creator.status(show_diff=diff)
+                creator.status(show_diff=diff, context_lines=context)
             
     except Exception as e:
         error_msg = Colors.colorize(f"❌ Error: {e}", Colors.BRIGHT_RED)
