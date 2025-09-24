@@ -712,7 +712,9 @@ class FixupCreator:
         
         # Print table with dynamic column width limits based on content
         max_col_widths = [index_width, sha_width, subject_width, diff_width]
-        table_output = tabulate(table_data, headers=headers, tablefmt="fancy_grid", stralign="left", maxcolwidths=max_col_widths)
+        # Enable proper multi-line cell handling
+        table_output = tabulate(table_data, headers=headers, tablefmt="fancy_grid", stralign="left", 
+                               maxcolwidths=max_col_widths, disable_numparse=True)
         print(table_output)
     
     def _get_compact_diff(self, target: FixupTarget, max_width: int, context_lines: int = 4) -> str:
