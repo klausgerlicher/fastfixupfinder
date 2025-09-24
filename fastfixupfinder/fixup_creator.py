@@ -655,7 +655,7 @@ class FixupCreator:
         # Index column: 5 chars, SHA: 8 chars, separators and padding: ~12 chars
         # Split remaining width between Subject and Diff columns (50% subject, 50% diff)
         fixed_width = 5 + 8 + 12  # Index + SHA + padding/separators  
-        available_width = max(80, terminal_width - fixed_width)
+        available_width = max(140, terminal_width - fixed_width)  # Use 140 as minimum for wider displays
         subject_width = int(available_width * 0.5)
         diff_width = int(available_width * 0.5)
         
