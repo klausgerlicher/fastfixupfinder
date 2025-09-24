@@ -692,7 +692,7 @@ class FixupCreator:
         print()
         
         # Print table
-        table_output = tabulate(table_data, headers=headers, tablefmt="grid", stralign="left")
+        table_output = tabulate(table_data, headers=headers, tablefmt="fancy_grid", stralign="left")
         print(table_output)
     
     def _get_compact_diff(self, target: FixupTarget, max_width: int, context_lines: int = 4) -> str:
