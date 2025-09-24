@@ -651,24 +651,17 @@ class FixupCreator:
         # Get terminal width for diff column truncation
         terminal_width = shutil.get_terminal_size().columns
         
-        # Calculate dynamic column widths to use full terminal width
-        # Index column: 5 chars, SHA: 8 chars, separators and padding: ~12 chars
-        # Split remaining width between Subject and Diff columns (50% subject, 50% diff)
-        fixed_width = 5 + 8 + 12  # Index + SHA + padding/separators  
-        available_width = max(140, terminal_width - fixed_width)  # Use 140 as minimum for wider displays
-        subject_width = int(available_width * 0.5)
-        diff_width = int(available_width * 0.5)
-        
+        # First pass: collect all data to analyze content lengths
         table_data = []
+        max_subject_len = 0
         
         for i, target in enumerate(fixup_targets, 1):
-            # Get truncated commit subject (first line only)
+            # Get commit subject (first line only) - don't truncate yet
             subject = target.commit_message.split('\n')[0]
-            if len(subject) > subject_width:
-                subject = subject[:subject_width-3] + "..."
+            max_subject_len = max(max_subject_len, len(subject))
             
-            # Generate compact diff for this target
-            diff_content = self._get_compact_diff(target, diff_width, context_lines)
+            # Generate compact diff for this target (with generous width for now)
+            diff_content = self._get_compact_diff(target, 200, context_lines)
             
             table_data.append([
                 str(i),
@@ -676,6 +669,33 @@ class FixupCreator:
                 subject,
                 diff_content
             ])
+        
+        # Calculate dynamic column widths based on content and terminal width
+        index_width = max(3, len(str(len(fixup_targets))))  # Width needed for index numbers
+        sha_width = 8  # SHA is always 8 chars
+        borders_padding = 12  # Approximate space for table borders and padding
+        
+        # Reserve space for fixed columns and borders
+        fixed_space = index_width + sha_width + borders_padding
+        available_space = max(100, terminal_width - fixed_space)
+        
+        # Dynamically split between subject and diff based on content
+        # Give subject minimum 20 chars, maximum 50 chars or 30% of available space
+        min_subject = 20
+        max_subject = min(50, int(available_space * 0.3))
+        optimal_subject = min(max_subject, max(min_subject, max_subject_len + 5))
+        
+        subject_width = optimal_subject
+        diff_width = available_space - subject_width
+        
+        # Second pass: apply truncation with calculated widths
+        for i, row in enumerate(table_data):
+            if len(row[2]) > subject_width:
+                table_data[i][2] = row[2][:subject_width-3] + "..."
+            
+            # Regenerate diff with proper width
+            target = fixup_targets[i]
+            table_data[i][3] = self._get_compact_diff(target, diff_width, context_lines)
         
         # Create colored headers
         headers = [
@@ -690,8 +710,8 @@ class FixupCreator:
         print(f"🎯 Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}:")
         print()
         
-        # Print table with explicit column width limits
-        max_col_widths = [5, 8, subject_width, diff_width]  # Index, SHA, Subject, Diff
+        # Print table with dynamic column width limits based on content
+        max_col_widths = [index_width, sha_width, subject_width, diff_width]
         table_output = tabulate(table_data, headers=headers, tablefmt="fancy_grid", stralign="left", maxcolwidths=max_col_widths)
         print(table_output)
     
