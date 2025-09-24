@@ -715,9 +715,9 @@ class FixupCreator:
         
         # Multi-line diff content is now properly handled by tabulate with disable_numparse=True
         
-        # Enable proper multi-line cell handling
+        # Enable proper multi-line cell handling - remove maxcolwidths to preserve newlines
         table_output = tabulate(table_data, headers=headers, tablefmt="fancy_grid", stralign="left", 
-                               maxcolwidths=max_col_widths, disable_numparse=True)
+                               disable_numparse=True)
         print(table_output)
     
     def _get_compact_diff(self, target: FixupTarget, max_width: int, context_lines: int = 4) -> str:
