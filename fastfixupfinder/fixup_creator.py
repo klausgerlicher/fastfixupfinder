@@ -653,12 +653,11 @@ class FixupCreator:
         
         # Calculate dynamic column widths to use full terminal width
         # Index column: 5 chars, SHA: 8 chars, separators and padding: ~12 chars
-        # Account for emoji width (📁 takes ~3 display chars) + filename padding
         # Split remaining width between Subject and Diff columns (50% subject, 50% diff)
         fixed_width = 5 + 8 + 12  # Index + SHA + padding/separators  
         available_width = max(80, terminal_width - fixed_width)
         subject_width = int(available_width * 0.5)
-        diff_width = int(available_width * 0.5) - 6  # Reserve extra space for emoji and filename
+        diff_width = int(available_width * 0.5)
         
         table_data = []
         
@@ -765,7 +764,7 @@ class FixupCreator:
                 diff_block = []
                 
                 # Add filename header as first line of diff block
-                file_header = Colors.colorize(f"📁 {file_name}", Colors.BRIGHT_BLUE, bold=True)
+                file_header = Colors.colorize(file_name, Colors.BRIGHT_BLUE, bold=True)
                 diff_block.append(file_header)
                 
                 # Build context lines with proper alignment
