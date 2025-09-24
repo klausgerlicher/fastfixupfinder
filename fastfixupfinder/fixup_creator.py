@@ -63,6 +63,7 @@ class FixupCreator:
         # Get all fixup targets first
         all_fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         created_commits = []
+        git_commands = []  # Track git commands for display
         
         # Apply organization filtering if specified
         if self.org_email_pattern:
@@ -84,6 +85,9 @@ class FixupCreator:
         # Show targets in table format (like status command)
         self._show_diff_table(fixup_targets, context_lines=4)
         
+        # Add initial git add command for both dry-run and actual execution
+        git_commands.append("git add .")
+        
         if not dry_run:
             # Store target commits for later rebase suggestion
             self._target_commits = [target.commit_hash for target in fixup_targets]
@@ -96,56 +100,69 @@ class FixupCreator:
             self.repo.git.add('.')
             
             for target in fixup_targets:
-                commit_hash = self.create_fixup_commit(target, dry_run)
+                commit_hash, commands = self.create_fixup_commit(target, dry_run)
                 if commit_hash:
                     created_commits.append(commit_hash)
+                git_commands.extend(commands)
+        
+        # For dry-run, collect commands from all targets  
+        if dry_run:
+            for target in fixup_targets:
+                _, commands = self.create_fixup_commit(target, dry_run)
+                git_commands.extend(commands)
+        
+        # Show git commands table at the end
+        if git_commands:
+            self._show_git_commands_table(git_commands, dry_run)
         
         return created_commits
     
-    def create_fixup_commit(self, target: FixupTarget, dry_run: bool = False) -> Optional[str]:
-        """Create a single fixup commit for the given target."""
+    def create_fixup_commit(self, target: FixupTarget, dry_run: bool = False) -> tuple[Optional[str], list[str]]:
+        """Create a single fixup commit for the given target.
+        
+        Returns:
+            tuple: (commit_hash, git_commands_list)
+        """
+        commands = []
         try:
             # Create commit message
             short_hash = target.commit_hash[:8]
             commit_msg = f"fixup! {target.commit_message}"
             
             if dry_run:
-                target_hash = Colors.colorize(short_hash, Colors.BRIGHT_CYAN, bold=True)
-                message = Colors.colorize(target.commit_message, Colors.WHITE, bold=True)
-                print(f"🔍 Would create fixup commit for {target_hash}: {message}")
-                
-                files_text = Colors.colorize(', '.join(target.files), Colors.BLUE)
-                print(f"  📁 Files: {files_text}")
-                
-                lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
-                print(f"  📝 Changed lines: {lines_count}")
-                return None
+                # Capture commands that would be executed
+                for file_path in target.files:
+                    commands.append(f"git add {file_path}")
+                commands.append(f'git commit -m "fixup! {target.commit_message}"')
+                return None, commands
             
             # Stage only the files related to this target
             staged_files = []
             for file_path in target.files:
                 if (self.repo_path / file_path).exists():
+                    commands.append(f"git add {file_path}")
                     self.repo.git.add(file_path)
                     staged_files.append(file_path)
             
             if not staged_files:
                 target_hash = Colors.colorize(short_hash, Colors.BRIGHT_CYAN, bold=True)
                 print(Colors.colorize(f"⚠️  No files to stage for target {target_hash}", Colors.YELLOW))
-                return None
+                return None, commands
             
             # Create the fixup commit
+            commands.append(f'git commit -m "fixup! {target.commit_message}"')
             commit = self.repo.index.commit(commit_msg)
             new_hash = Colors.colorize(commit.hexsha[:8], Colors.BRIGHT_GREEN, bold=True)
             target_hash = Colors.colorize(short_hash, Colors.BRIGHT_CYAN, bold=True)
             print(f"✅ Created fixup commit {new_hash} for {target_hash}")
             
-            return commit.hexsha
+            return commit.hexsha, commands
             
         except Exception as e:
             target_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
             error_msg = Colors.colorize(f"❌ Error creating fixup commit for {target_hash}: {e}", Colors.BRIGHT_RED)
             print(error_msg)
-            return None
+            return None, commands
     
     def interactive_fixup_selection(self, compact_mode: bool = False, dry_run: bool = False) -> List[str]:
         """Interactively select which fixup commits to create with line-level control.
@@ -876,3 +893,35 @@ class FixupCreator:
             lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
             message = target.commit_message[:60] + "..." if len(target.commit_message) > 60 else target.commit_message
             print(f"{short_hash} {message} ({files_count} files, {lines_count} lines)")
+
+    def _show_git_commands_table(self, git_commands: List[str], dry_run: bool = False) -> None:
+        """Show git commands in a table format."""
+        if not git_commands:
+            return
+        
+        print()  # Add spacing before the table
+        
+        # Prepare table data
+        table_data = []
+        for i, command in enumerate(git_commands, 1):
+            table_data.append([str(i), command])
+        
+        # Create colored headers
+        headers = [
+            Colors.colorize("Step", Colors.BRIGHT_MAGENTA, bold=True),
+            Colors.colorize("Git Command", Colors.BRIGHT_GREEN, bold=True)
+        ]
+        
+        # Print header
+        if dry_run:
+            title = Colors.colorize("🔍 Git commands that would be executed:", Colors.BRIGHT_CYAN, bold=True)
+        else:
+            title = Colors.colorize("✅ Git commands executed:", Colors.BRIGHT_GREEN, bold=True)
+        
+        print(title)
+        print()
+        
+        # Print table with git commands
+        table_output = tabulate(table_data, headers=headers, tablefmt="fancy_grid", stralign="left", 
+                               disable_numparse=True)
+        print(table_output)
