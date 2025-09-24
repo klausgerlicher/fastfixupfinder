@@ -751,39 +751,45 @@ class FixupCreator:
                     seen_lines.add(change_key)
                     unique_changes.append(change)
             
-            # Show filename header once and build context diff
+            # Show filename header once and build context diff for all changes
             if unique_changes:
-                change = unique_changes[0]
-                line_num = change.line_number - 1  # Convert to 0-based index
-                
-                # Calculate context range
-                start_line = max(0, line_num - context_lines)
-                end_line = min(len(file_lines), line_num + context_lines + 1)
-                
                 # Build compact diff block
                 diff_block = []
                 
-                # Add filename header as first line of diff block
+                # Add filename header as first line of diff block  
                 file_header = Colors.colorize(file_name, Colors.BRIGHT_BLUE, bold=True)
                 diff_block.append(file_header)
                 
-                # Build context lines with proper alignment
+                # Get all line numbers that have changes
+                changed_line_numbers = {change.line_number for change in unique_changes}
+                
+                # Calculate the range to show all changes with context
+                all_line_nums = [change.line_number for change in unique_changes]
+                min_line = min(all_line_nums)
+                max_line = max(all_line_nums)
+                
+                # Expand context around the range
+                start_line = max(0, min_line - 1 - context_lines)
+                end_line = min(len(file_lines), max_line - 1 + context_lines + 1)
+                
+                # Build context lines with all changes highlighted
                 for i in range(start_line, end_line):
                     current_line = file_lines[i].rstrip()
                     line_number = i + 1
                     
-                    # Determine if this is the changed line
-                    if line_number == change.line_number:
-                        # This is the actual changed line
-                        if change.change_type == "added":
-                            symbol = Colors.colorize("+", Colors.BRIGHT_GREEN, bold=True)
-                        elif change.change_type == "deleted":
-                            symbol = Colors.colorize("-", Colors.BRIGHT_RED, bold=True)
-                        else:  # modified
-                            symbol = Colors.colorize("~", Colors.BRIGHT_YELLOW, bold=True)
-                    else:
-                        # Context line
-                        symbol = " "
+                    # Determine if this is a changed line and what type
+                    symbol = " "  # Default context line
+                    if line_number in changed_line_numbers:
+                        # Find the change type for this line
+                        for change in unique_changes:
+                            if change.line_number == line_number:
+                                if change.change_type == "added":
+                                    symbol = Colors.colorize("+", Colors.BRIGHT_GREEN, bold=True)
+                                elif change.change_type == "deleted":
+                                    symbol = Colors.colorize("-", Colors.BRIGHT_RED, bold=True)
+                                else:  # modified
+                                    symbol = Colors.colorize("~", Colors.BRIGHT_YELLOW, bold=True)
+                                break
                     
                     line_ref = Colors.colorize(f"{line_number:>3}", Colors.CYAN)
                     
@@ -796,21 +802,11 @@ class FixupCreator:
                     
                     diff_block.append(f"{symbol} {line_ref} │ {content}")
                 
-                # Add notice if there are more changes in this file
-                if len(unique_changes) > 1:
-                    more_count = len(unique_changes) - 1
-                    diff_block.append(Colors.colorize(f"... {more_count} more lines", Colors.DIM))
-                
                 # Add this file's diff block to main diff lines
                 diff_lines.extend(diff_block)
         
-        # Join all diff lines and truncate if needed for table display
+        # Join all diff lines - show full context without truncation
         result = "\n".join(diff_lines)
-        # Allow more lines for context but still limit for table readability
-        max_lines = 8  # Show up to 8 lines in table cell
-        lines = result.split('\n')
-        if len(lines) > max_lines:
-            result = '\n'.join(lines[:max_lines-1]) + '\n' + Colors.colorize(f"... {len(lines) - max_lines + 1} more lines", Colors.DIM)
         
         return result
     
