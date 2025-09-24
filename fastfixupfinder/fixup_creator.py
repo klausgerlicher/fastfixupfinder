@@ -690,8 +690,9 @@ class FixupCreator:
         print(f"🎯 Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}:")
         print()
         
-        # Print table
-        table_output = tabulate(table_data, headers=headers, tablefmt="fancy_grid", stralign="left")
+        # Print table with explicit column width limits
+        max_col_widths = [5, 8, subject_width, diff_width]  # Index, SHA, Subject, Diff
+        table_output = tabulate(table_data, headers=headers, tablefmt="fancy_grid", stralign="left", maxcolwidths=max_col_widths)
         print(table_output)
     
     def _get_compact_diff(self, target: FixupTarget, max_width: int, context_lines: int = 4) -> str:
