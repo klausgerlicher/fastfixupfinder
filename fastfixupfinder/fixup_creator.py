@@ -89,10 +89,10 @@ class FixupCreator:
             # Store target commits for later rebase suggestion
             self._target_commits = [target.commit_hash for target in fixup_targets]
 
-            # Create automatic backup before making changes
+            # Create automatic backup of HEAD (not working directory) before making changes
             if auto_backup:
-                self._create_safety_backup()
-            
+                self._create_head_backup()
+
             for target in fixup_targets:
                 commit_hash, commands = self.create_fixup_commit(target, dry_run)
                 if commit_hash:
@@ -510,30 +510,30 @@ class FixupCreator:
             hint = Colors.colorize("    (Replace <number_of_commits> with appropriate count)", Colors.DIM)
             print(hint)
     
-    def _create_safety_backup(self) -> None:
-        """Create automatic safety backup before making changes."""
+    def _create_head_backup(self) -> None:
+        """Create automatic backup tag pointing to current HEAD before making changes."""
         try:
-            # Create a stash with timestamp
+            # Create a tag with timestamp pointing to current HEAD
             timestamp = subprocess.run(
-                ["date", "+%Y%m%d_%H%M%S"], 
-                capture_output=True, 
+                ["date", "+%Y%m%d_%H%M%S"],
+                capture_output=True,
                 text=True
             ).stdout.strip()
-            
-            stash_message = f"fastfixupfinder_backup_{timestamp}"
-            
-            # Check if there are changes to stash
-            status_output = self.repo.git.status("--porcelain")
-            if status_output.strip():
-                self.repo.git.stash("push", "-m", stash_message)
-                print(f"🛡️  Safety backup created: {stash_message}")
-                print("   To restore if needed: git stash list && git stash pop")
-            else:
-                print("ℹ️  No changes to backup")
-                
+
+            tag_name = f"fastfixupfinder_backup_{timestamp}"
+
+            # Create tag pointing to current HEAD
+            self.repo.git.tag(tag_name)
+            print(f"🛡️  Safety backup created: {tag_name}")
+            print(f"   To restore if needed: git reset --hard {tag_name}")
+
         except Exception as e:
             print(f"⚠️  Warning: Could not create safety backup: {e}")
             print("   Consider creating manual backup before proceeding")
+
+    def _create_safety_backup(self) -> None:
+        """Legacy method - redirects to head backup."""
+        self._create_head_backup()
     
     def restore_from_backup(self, backup_name: Optional[str] = None) -> bool:
         """Restore from a safety backup."""
