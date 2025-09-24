@@ -125,9 +125,8 @@ class FixupCreator:
         """
         commands = []
         try:
-            # Create commit message
+            # Prepare for fixup commit creation
             short_hash = target.commit_hash[:8]
-            commit_msg = f"fixup! {target.commit_message}"
             
             if dry_run:
                 # Capture commands that would be executed with line-level precision
@@ -137,7 +136,7 @@ class FixupCreator:
                     if target_lines:
                         line_info = f"lines {sorted(target_lines)}"
                         commands.append(f"git add --patch {file_path}  # select {line_info}")
-                commands.append(f'git commit -m "fixup! {target.commit_message}"')
+                commands.append(f'git commit --fixup {target.commit_hash}')
                 return None, commands
             
             # Stage only the specific lines related to this target using --patch
@@ -154,13 +153,16 @@ class FixupCreator:
                 return None, commands
             
             # Create the fixup commit
-            commands.append(f'git commit -m "fixup! {target.commit_message}"')
-            commit = self.repo.index.commit(commit_msg)
-            new_hash = Colors.colorize(commit.hexsha[:8], Colors.BRIGHT_GREEN, bold=True)
+            commands.append(f'git commit --fixup {target.commit_hash}')
+            self.repo.git.commit(f'--fixup={target.commit_hash}')
+
+            # Get the hash of the newly created commit
+            commit_hash = self.repo.head.commit.hexsha
+            new_hash = Colors.colorize(commit_hash[:8], Colors.BRIGHT_GREEN, bold=True)
             target_hash = Colors.colorize(short_hash, Colors.BRIGHT_CYAN, bold=True)
             print(f"✅ Created fixup commit {new_hash} for {target_hash}")
-            
-            return commit.hexsha, commands
+
+            return commit_hash, commands
             
         except Exception as e:
             target_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
