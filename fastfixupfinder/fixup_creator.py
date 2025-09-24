@@ -712,6 +712,9 @@ class FixupCreator:
         
         # Print table with dynamic column width limits based on content
         max_col_widths = [index_width, sha_width, subject_width, diff_width]
+        
+        # Multi-line diff content is now properly handled by tabulate with disable_numparse=True
+        
         # Enable proper multi-line cell handling
         table_output = tabulate(table_data, headers=headers, tablefmt="fancy_grid", stralign="left", 
                                maxcolwidths=max_col_widths, disable_numparse=True)
@@ -830,6 +833,8 @@ class FixupCreator:
         
         # Join all diff lines - show full context without truncation
         result = "\n".join(diff_lines)
+        
+        # Result contains proper newlines for multi-line table cell display
         
         return result
     
