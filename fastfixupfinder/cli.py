@@ -47,8 +47,17 @@ def status(repo, oneline, detailed, fixups_only, include_all, org_email, diff, c
         
         creator = FixupCreator(repo, org_email_pattern=org_email)
         
+        # Create progress callback for non-oneline mode
+        def progress_callback(message):
+            if not oneline:
+                click.echo(f"\r{Colors.colorize(message, Colors.CYAN)}" + " " * 10, nl=False)
+        
         # Get all targets first, then apply org filtering if needed
-        all_targets = creator.analyzer.find_fixup_targets(filter_mode)
+        all_targets = creator.analyzer.find_fixup_targets(filter_mode, progress_callback if not oneline else None)
+        
+        # Clear progress indicator  
+        if not oneline:
+            click.echo("\r" + " " * 50 + "\r", nl=False)  # Clear the progress line
         if org_email:
             targets = creator.analyzer.filter_targets_by_organization(all_targets, org_email)
         else:

@@ -429,18 +429,27 @@ class GitAnalyzer:
         except git.exc.GitCommandError:
             return None
     
-    def find_fixup_targets(self, filter_mode: FilterMode = FilterMode.SMART_DEFAULT) -> List[FixupTarget]:
+    def find_fixup_targets(self, filter_mode: FilterMode = FilterMode.SMART_DEFAULT, progress_callback=None) -> List[FixupTarget]:
         """Find all potential fixup targets based on current changes.
         
         Args:
             filter_mode: How to filter the results (SMART_DEFAULT, FIXUPS_ONLY, INCLUDE_ALL)
+            progress_callback: Optional callback function for progress updates
         """
+        if progress_callback:
+            progress_callback("🔄 Getting changed lines...")
         changed_lines = self.get_changed_lines()
         
         # Group changed lines by their original commits
         commit_groups: Dict[str, List[ChangedLine]] = {}
         
-        for changed_line in changed_lines:
+        if progress_callback:
+            progress_callback(f"🔍 Analyzing {len(changed_lines)} changed lines...")
+        
+        for i, changed_line in enumerate(changed_lines):
+            # Update progress every 10 lines for larger changes
+            if progress_callback and len(changed_lines) > 20 and i % 10 == 0:
+                progress_callback(f"🔍 Processing line {i+1}/{len(changed_lines)}...")
             # For deleted/modified lines, find the original commit
             if changed_line.change_type in ['deleted', 'modified']:
                 blame_info = self.get_blame_info(
@@ -485,7 +494,12 @@ class GitAnalyzer:
                 continue
         
         # Apply filtering based on filter mode
+        if progress_callback:
+            progress_callback("🎯 Applying filters...")
         filtered_targets = self._filter_targets_by_mode(fixup_targets, filter_mode)
+        
+        if progress_callback:
+            progress_callback("✅ Analysis complete")
         
         return filtered_targets
     
