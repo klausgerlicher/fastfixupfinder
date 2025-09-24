@@ -81,20 +81,24 @@ class FixupCreator:
                 print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
                 return created_commits
         
-        # Store target commits for later rebase suggestion
-        self._target_commits = [target.commit_hash for target in fixup_targets]
+        # Show targets in table format (like status command)
+        self._show_diff_table(fixup_targets, context_lines=4)
         
-        # Create automatic backup before making changes
-        if not dry_run and auto_backup:
-            self._create_safety_backup()
-        
-        # Stage all changes first
-        self.repo.git.add('.')
-        
-        for target in fixup_targets:
-            commit_hash = self.create_fixup_commit(target, dry_run)
-            if commit_hash:
-                created_commits.append(commit_hash)
+        if not dry_run:
+            # Store target commits for later rebase suggestion
+            self._target_commits = [target.commit_hash for target in fixup_targets]
+            
+            # Create automatic backup before making changes
+            if auto_backup:
+                self._create_safety_backup()
+            
+            # Stage all changes first
+            self.repo.git.add('.')
+            
+            for target in fixup_targets:
+                commit_hash = self.create_fixup_commit(target, dry_run)
+                if commit_hash:
+                    created_commits.append(commit_hash)
         
         return created_commits
     
