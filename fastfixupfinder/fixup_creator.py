@@ -131,8 +131,9 @@ class FixupCreator:
             
             if dry_run:
                 # Capture commands that would be executed
+                # Note: Currently stages entire files, not just target-specific lines
                 for file_path in target.files:
-                    commands.append(f"git add {file_path}")
+                    commands.append(f"git add {file_path}  # stages entire file")
                 commands.append(f'git commit -m "fixup! {target.commit_message}"')
                 return None, commands
             
@@ -140,7 +141,7 @@ class FixupCreator:
             staged_files = []
             for file_path in target.files:
                 if (self.repo_path / file_path).exists():
-                    commands.append(f"git add {file_path}")
+                    commands.append(f"git add {file_path}  # stages entire file")
                     self.repo.git.add(file_path)
                     staged_files.append(file_path)
             
@@ -925,3 +926,8 @@ class FixupCreator:
         table_output = tabulate(table_data, headers=headers, tablefmt="fancy_grid", stralign="left", 
                                disable_numparse=True)
         print(table_output)
+        
+        # Add warning about current limitation
+        warning = Colors.colorize("⚠️  Note: Currently stages entire files, not individual lines per fixup target", Colors.YELLOW)
+        print()
+        print(warning)
