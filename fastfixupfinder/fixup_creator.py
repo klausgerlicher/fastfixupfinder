@@ -84,20 +84,14 @@ class FixupCreator:
         
         # Show targets in table format (like status command)
         self._show_diff_table(fixup_targets, context_lines=4)
-        
-        # Add initial git add command for both dry-run and actual execution
-        git_commands.append("git add .")
-        
+
         if not dry_run:
             # Store target commits for later rebase suggestion
             self._target_commits = [target.commit_hash for target in fixup_targets]
-            
+
             # Create automatic backup before making changes
             if auto_backup:
                 self._create_safety_backup()
-            
-            # Stage all changes first
-            self.repo.git.add('.')
             
             for target in fixup_targets:
                 commit_hash, commands = self.create_fixup_commit(target, dry_run)
@@ -135,7 +129,7 @@ class FixupCreator:
                     target_lines = [cl.line_number for cl in target.changed_lines if cl.file_path == file_path]
                     if target_lines:
                         line_info = f"lines {sorted(target_lines)}"
-                        commands.append(f"git add --patch {file_path}  # select {line_info}")
+                        commands.append(f"git add --patch {file_path}  # auto-select {line_info}")
                 commands.append(f'git commit --fixup {target.commit_hash}')
                 return None, commands
             
