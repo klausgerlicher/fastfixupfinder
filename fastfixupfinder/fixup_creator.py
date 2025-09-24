@@ -658,7 +658,7 @@ class FixupCreator:
         fixed_width = 5 + 8 + 12  # Index + SHA + padding/separators  
         available_width = max(80, terminal_width - fixed_width)
         subject_width = int(available_width * 0.5)
-        diff_width = int(available_width * 0.5) - 5  # Reserve extra space for emoji and filename
+        diff_width = int(available_width * 0.5) - 6  # Reserve extra space for emoji and filename
         
         table_data = []
         
