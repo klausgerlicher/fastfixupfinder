@@ -8,14 +8,13 @@ This document describes all possible workflows for using Fast Fixup Finder to ma
 
 1. [Quick Status Check](#1-quick-status-check)
 2. [Non-Interactive Auto-Create](#2-non-interactive-auto-create)
-3. [Non-Interactive with Squash Selection](#3-non-interactive-with-squash-selection)
-4. [Interactive Mode (Streamlined)](#4-interactive-mode-streamlined)
-5. [Visual GUI Mode](#5-visual-gui-mode)
-6. [Dry-Run Preview](#6-dry-run-preview)
-7. [Converting Fixup to Squash (Resquash)](#7-converting-fixup-to-squash-resquash)
-8. [Restore from Backup](#8-restore-from-backup)
-9. [Organization Email Filtering](#9-organization-email-filtering)
-10. [Complete End-to-End Workflow](#10-complete-end-to-end-workflow)
+3. [Interactive Mode (Simplified)](#3-interactive-mode-simplified)
+4. [Visual GUI Mode](#4-visual-gui-mode)
+5. [Dry-Run Preview](#5-dry-run-preview)
+6. [Converting Fixup to Squash (Resquash)](#6-converting-fixup-to-squash-resquash)
+7. [Restore from Backup](#7-restore-from-backup)
+8. [Organization Email Filtering](#8-organization-email-filtering)
+9. [Complete End-to-End Workflow](#9-complete-end-to-end-workflow)
 
 ---
 
@@ -80,6 +79,7 @@ fastfixupfinder create --no-backup
 3. Creates fixup commits for all targets
 4. Creates automatic backup tag
 5. Shows rebase command
+6. Suggests resquash command for conversions
 
 ### Example:
 
@@ -89,10 +89,13 @@ $ fastfixupfinder create
 🎯 Found 2 potential fixup targets:
 [Shows table with targets]
 
-🚀 Creating commits...
+🚀 Creating fixup commits...
 
 ✅ Created fixup commit a1b2c3d4 for 08743fb3
 ✅ Created fixup commit b2c3d4e5 for 59912895
+
+💡 Tip: To convert any fixup to squash with message editing:
+   fastfixupfinder resquash <commit-sha>
 
 🚀 To apply the fixup commits, run:
     git rebase -i --autosquash HEAD~5
@@ -102,73 +105,11 @@ $ fastfixupfinder create
 - All changes are clearly fixups
 - You trust the auto-assignment
 - Speed is priority
-- No message editing needed
+- Want to decide on message editing later (using resquash)
 
 ---
 
-## 3. Non-Interactive with Squash Selection
-
-**Use Case**: Automatically create commits but mark some as squash for message editing during rebase.
-
-### Command:
-
-```bash
-fastfixupfinder create
-```
-
-### Workflow:
-1. Tool shows all targets
-2. **Prompt**: `Mark any targets for squash? [y/N]:`
-   - Press `y` to select squash targets
-   - Press `n` or Enter to skip (all fixup)
-3. If yes: Shows target table
-4. **Prompt**: `Enter target numbers for squash (or 'none'):`
-   - Enter: `1,3` or `1-3` for ranges
-5. Opens editor for each squash target message
-6. Creates all commits (fixup + squash)
-
-### Example:
-
-```bash
-$ fastfixupfinder create
-
-[Shows targets table]
-
-Mark any targets for squash? [y/N]: y
-
-╒═══════╤══════════╤═══════════════════════╕
-│ Index │ SHA      │ Subject               │
-╞═══════╪══════════╪═══════════════════════╡
-│ 1     │ 08743fb3 │ Add basic calculator..│
-│ 2     │ 59912895 │ Add utility functions.│
-╘═══════╧══════════╧═══════════════════════╛
-
-Enter target numbers for squash (or 'none'): 1
-
-📝 Editing messages for 1 squash commit(s)...
-
-━━━ Target 1: 08743fb3 ━━━
-Original: Add basic calculator functions...
-
-✏️  Opening editor...
-[Editor opens]
-
-✅ Saved: Add basic calculator with improved error handling
-
-🚀 Creating commits...
-
-✅ Created squash commit a1b2c3d4 for 08743fb3
-✅ Created fixup commit b2c3d4e5 for 59912895
-```
-
-### When to Use:
-- Most changes are fixups, but some need message editing
-- You want to customize specific commit messages
-- Faster than full interactive mode
-
----
-
-## 4. Interactive Mode (Simplified)
+## 3. Interactive Mode (Simplified)
 
 **Use Case**: Quickly select and create fixup commits with review.
 
@@ -244,11 +185,11 @@ After creating fixup commits, use the resquash command to convert specific ones:
 ```bash
 fastfixupfinder resquash <commit-sha>
 ```
-See workflow #7 for details on the resquash command.
+See workflow #6 for details on the resquash command.
 
 ---
 
-## 5. Visual GUI Mode
+## 4. Visual GUI Mode
 
 **Use Case**: Drag-and-drop visual interface for complex assignments.
 
@@ -283,7 +224,7 @@ fastfixupfinder gui
 
 ---
 
-## 6. Dry-Run Preview
+## 5. Dry-Run Preview
 
 **Use Case**: Preview what would happen without making any changes.
 
@@ -320,7 +261,7 @@ fastfixupfinder create -i --dry-run
 
 ---
 
-## 7. Converting Fixup to Squash (Resquash)
+## 6. Converting Fixup to Squash (Resquash)
 
 **Use Case**: Convert an already-created fixup! commit to squash! with message editing.
 
@@ -384,7 +325,7 @@ $ git rebase --continue
 
 ---
 
-## 8. Restore from Backup
+## 7. Restore from Backup
 
 **Use Case**: Undo changes and restore to state before fixup creation.
 
@@ -434,7 +375,7 @@ $ git reset --hard fastfixupfinder_backup_20250924_143022
 
 ---
 
-## 9. Organization Email Filtering
+## 8. Organization Email Filtering
 
 **Use Case**: Only create fixups for commits by your team/organization.
 
@@ -459,7 +400,7 @@ fastfixupfinder create -i --org-email ".*@mycompany\.com"
 
 ---
 
-## 10. Complete End-to-End Workflow
+## 9. Complete End-to-End Workflow
 
 **Use Case**: Recommended workflow for day-to-day use.
 
@@ -542,20 +483,18 @@ Do you need to review changes before creating?
 └─ Yes → Do you need selective target creation?
     ├─ No → Use workflow #2 with --dry-run first
     │
-    ├─ Yes, simple → Use workflow #4 (Interactive Mode)
+    ├─ Yes, simple → Use workflow #3 (Interactive Mode)
     │
-    └─ Yes, complex → Use workflow #5 (Visual GUI Mode)
+    └─ Yes, complex → Use workflow #4 (Visual GUI Mode)
 
-Do you need to edit commit messages (squash)?
-├─ Before creating → Use workflow #3 (Non-Interactive with Squash)
-│
-└─ After creating → Use workflow #7 (Resquash)
+Need to edit commit messages (squash)?
+└─ Use workflow #6 (Resquash) after creating fixups
 
 Already created fixups but need to convert to squash?
-└─ Use workflow #7 (Resquash)
+└─ Use workflow #6 (Resquash)
 
 Need to undo everything?
-└─ Use workflow #8 (Restore from Backup)
+└─ Use workflow #7 (Restore from Backup)
 ```
 
 ---
@@ -566,7 +505,6 @@ Need to undo everything?
 |------------|---------|
 | Just check status | `fastfixupfinder status` |
 | Create all fixups fast | `fastfixupfinder create` |
-| Create with squash option | `fastfixupfinder create` (prompts for squash) |
 | Review before creating | `fastfixupfinder create --dry-run` |
 | Select specific targets | `fastfixupfinder create -i` |
 | Visual drag-and-drop | `fastfixupfinder gui` |

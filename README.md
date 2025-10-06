@@ -185,7 +185,7 @@ fastfixupfinder create
 | `status --detailed` | Show detailed analysis with line-by-line breakdown | Code review, verification |
 | `status --fixups-only` | Only show high-confidence fixup targets | Focused workflow, avoiding noise |
 | `status --include-all` | Include all changes regardless of likelihood | Manual review, debugging |
-| `create` | Create fixup commits (prompts for squash option) | Simple cases, trusted automation |
+| `create` | Create fixup commits automatically | Simple cases, trusted automation |
 | `create --dry-run` | Preview what would be created | Safety, verification before commit |
 | `create --interactive` | Select targets interactively (fixups only) | Selective target creation |
 | `gui` | **Visual drag-and-drop interface** | **Complex workflows, visual users** |
