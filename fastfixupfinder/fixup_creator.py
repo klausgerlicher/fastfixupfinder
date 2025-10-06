@@ -111,9 +111,21 @@ class FixupCreator:
         
         return created_commits
     
-    def create_fixup_commit(self, target: FixupTarget, dry_run: bool = False) -> tuple[Optional[str], list[str]]:
-        """Create a single fixup commit for the given target.
-        
+    def create_fixup_commit(
+        self,
+        target: FixupTarget,
+        dry_run: bool = False,
+        commit_type: str = "fixup",
+        custom_message: Optional[str] = None
+    ) -> tuple[Optional[str], list[str]]:
+        """Create a single fixup or squash commit for the given target.
+
+        Args:
+            target: The fixup target
+            dry_run: If True, only show what would be done
+            commit_type: 'fixup' or 'squash'
+            custom_message: Custom message for squash commits (without 'squash!' prefix)
+
         Returns:
             tuple: (commit_hash, git_commands_list)
         """
@@ -130,7 +142,13 @@ class FixupCreator:
                     if target_lines:
                         line_info = f"lines {sorted(target_lines)}"
                         commands.append(f"git add --patch {file_path}  # auto-select {line_info}")
-                commands.append(f'git commit --fixup {target.commit_hash} --no-verify')
+
+                # Add commit command based on type
+                if commit_type == "squash":
+                    message_to_use = custom_message or target.commit_message
+                    commands.append(f'git commit --squash {target.commit_hash} -m "{message_to_use}" --no-verify')
+                else:
+                    commands.append(f'git commit --fixup {target.commit_hash} --no-verify')
                 return None, commands
             
             # Stage only the specific lines related to this target using --patch
@@ -146,15 +164,27 @@ class FixupCreator:
                 print(Colors.colorize(f"⚠️  No files to stage for target {target_hash}", Colors.YELLOW))
                 return None, commands
             
-            # Create the fixup commit
-            commands.append(f'git commit --fixup {target.commit_hash} --no-verify')
-            self.repo.git.commit(f'--fixup={target.commit_hash}', '--no-verify')
+            # Create the fixup or squash commit
+            if commit_type == "squash":
+                message_to_use = custom_message or target.commit_message
+                commands.append(f'git commit --squash {target.commit_hash} -m "{message_to_use}" --no-verify')
+                # Git automatically adds 'squash!' prefix
+                self.repo.git.commit(
+                    f'--squash={target.commit_hash}',
+                    '-m', message_to_use,
+                    '--no-verify'
+                )
+                commit_type_display = "squash"
+            else:
+                commands.append(f'git commit --fixup {target.commit_hash} --no-verify')
+                self.repo.git.commit(f'--fixup={target.commit_hash}', '--no-verify')
+                commit_type_display = "fixup"
 
             # Get the hash of the newly created commit
             commit_hash = self.repo.head.commit.hexsha
             new_hash = Colors.colorize(commit_hash[:8], Colors.BRIGHT_GREEN, bold=True)
             target_hash = Colors.colorize(short_hash, Colors.BRIGHT_CYAN, bold=True)
-            print(f"✅ Created fixup commit {new_hash} for {target_hash}")
+            print(f"✅ Created {commit_type_display} commit {new_hash} for {target_hash}")
 
             return commit_hash, commands
             
@@ -219,17 +249,28 @@ class FixupCreator:
         
         # Store target commits for later rebase suggestion
         self._target_commits = [target.commit_hash for target in final_targets]
-        
-        # Stage all changes first (skip in dry-run mode)
-        if not dry_run:
-            self.repo.git.add('.')
-        
-        # Create selected fixup commits
+
+        # Create selected fixup commits with user choice of fixup/squash
         for target in final_targets:
-            commit_hash = self.create_fixup_commit(target, dry_run)
+            print()  # Blank line for readability
+            print(Colors.colorize(f"📝 Target: {target.commit_hash[:8]} - {target.commit_message[:60]}...", Colors.WHITE, bold=True))
+
+            # Ask user for commit type
+            commit_type = self._ask_commit_type()
+
+            # If squash, ask for custom message
+            custom_message = None
+            if commit_type == "squash":
+                print()
+                print(Colors.colorize("✏️  Opening editor to edit commit message...", Colors.CYAN))
+                custom_message = self._edit_commit_message_in_editor(target.commit_message)
+                print(Colors.colorize(f"✅ Message: {custom_message[:60]}{'...' if len(custom_message) > 60 else ''}", Colors.GREEN))
+
+            # Create the commit
+            commit_hash, _ = self.create_fixup_commit(target, dry_run, commit_type, custom_message)
             if commit_hash:
                 created_commits.append(commit_hash)
-        
+
         return created_commits
     
     def _interactive_target_selection(self, fixup_targets: List[FixupTarget], compact_mode: bool = False) -> List[FixupTarget]:
@@ -1059,5 +1100,79 @@ class FixupCreator:
         # Don't forget the last hunk
         if in_hunk:
             hunks_to_accept.append(current_hunk_has_target)
-        
+
         return hunks_to_accept
+
+    def _ask_commit_type(self) -> str:
+        """Ask user whether to create fixup or squash commit.
+
+        Returns:
+            'fixup' or 'squash'
+        """
+        while True:
+            response = input("🔧 Commit type [f]ixup or [s]quash?: ").strip().lower()
+            if response == 'f' or response == 'fixup':
+                return 'fixup'
+            elif response == 's' or response == 'squash':
+                return 'squash'
+            else:
+                print(Colors.colorize("Invalid choice. Please enter 'f' or 's'", Colors.YELLOW))
+
+    def _edit_commit_message_in_editor(self, prefill_message: str) -> str:
+        """Open editor for user to edit commit message.
+
+        Args:
+            prefill_message: Initial message to prefill
+
+        Returns:
+            Edited message (without 'squash!' prefix)
+        """
+        import tempfile
+        import os
+
+        try:
+            # Create temporary file with prefilled message
+            with tempfile.NamedTemporaryFile(
+                mode='w+',
+                suffix='.txt',
+                delete=False,
+                encoding='utf-8'
+            ) as f:
+                temp_path = f.name
+                f.write(prefill_message)
+                f.flush()
+
+            # Get editor from environment
+            editor = os.environ.get('EDITOR', os.environ.get('VISUAL', 'nano'))
+
+            # Open editor
+            result = subprocess.run([editor, temp_path])
+
+            if result.returncode != 0:
+                print(Colors.colorize("Editor exited with error, using original message", Colors.YELLOW))
+                os.unlink(temp_path)
+                return prefill_message
+
+            # Read edited content
+            with open(temp_path, 'r', encoding='utf-8') as f:
+                edited_message = f.read().strip()
+
+            # Cleanup
+            os.unlink(temp_path)
+
+            # Validate not empty
+            if not edited_message:
+                print(Colors.colorize("Empty message, using original", Colors.YELLOW))
+                return prefill_message
+
+            return edited_message
+
+        except Exception as e:
+            print(Colors.colorize(f"Error opening editor: {e}", Colors.YELLOW))
+            print(Colors.colorize("Falling back to inline editing...", Colors.DIM))
+
+            # Fallback to inline
+            print(f"\n📝 Edit message (or press Enter to keep original):")
+            print(f"   Original: {prefill_message}")
+            edited = input("> ").strip()
+            return edited if edited else prefill_message
