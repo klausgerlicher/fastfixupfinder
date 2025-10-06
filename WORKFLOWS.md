@@ -124,20 +124,28 @@ fastfixupfinder create -i
 
 **Step 1: Select Targets**
 ```
-╒═══════╤══════════╤═══════════════════════╤═══════╤═══════╤══════════╕
-│ Index │ SHA      │ Subject               │ Files │ Lines │ Selected │
-╞═══════╪══════════╪═══════════════════════╪═══════╪═══════╪══════════╡
-│ 1     │ 08743fb3 │ Add basic calculator..│     1 │     3 │          │
-│ 2     │ 59912895 │ Add utility functions.│     1 │     1 │          │
-│ 3     │ abc12345 │ Fix validation logic..│     2 │     5 │          │
-╘═══════╧══════════╧═══════════════════════╧═══════╧═══════╧══════════╛
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 Target Selection
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🎯 Select targets (or 'done' to continue): 1,3
+  [ ] 1. 08743fb3  Add basic calculator functions (3 files, 12 lines)
+  [ ] 2. 59912895  Fix validation logic (1 file, 4 lines)
+  [ ] 3. abc12345  Update documentation (2 files, 8 lines)
+
+Commands: 1,3,5 | 1-3 (range) | all | info N | done
+→ 1,3
 ✅ Added 2 target(s), total: 2
 
-[Table updates with ✓ marks]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 Target Selection (2 of 3 selected)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🎯 Select targets (or 'done' to continue): done
+  [✓] 1. 08743fb3  Add basic calculator functions (3 files, 12 lines)
+  [ ] 2. 59912895  Fix validation logic (1 file, 4 lines)
+  [✓] 3. abc12345  Update documentation (2 files, 8 lines)
+
+Commands: 1,3,5 | 1-3 (range) | all | info N | done
+→ done
 ```
 
 **Step 2: View Auto-Assigned Lines**

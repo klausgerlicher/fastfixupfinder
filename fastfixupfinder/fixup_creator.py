@@ -1145,52 +1145,47 @@ class FixupCreator:
             edited = input("> ").strip()
             return edited if edited else prefill_message
 
-    def _display_targets_table(
+    def _display_targets_compact(
         self,
         targets: List[FixupTarget],
-        selected_indices: Optional[set] = None,
-        commit_types: Optional[dict] = None
+        selected_indices: Optional[set] = None
     ):
-        """Display targets in a table with selection state.
+        """Display targets in a compact numbered list format.
 
         Args:
             targets: List of fixup targets
             selected_indices: Set of selected indices (1-based)
-            commit_types: Dict mapping index to commit type ('fixup'/'squash')
         """
-        headers = ["Index", "SHA", "Subject", "Files", "Lines"]
-
-        if selected_indices is not None:
-            headers.append("Selected")
-        if commit_types is not None:
-            headers.append("Type")
-
-        rows = []
         for i, target in enumerate(targets, 1):
-            # Truncate subject to fit
-            clean_message = ' '.join(target.commit_message.split())
-            subject = clean_message[:45] + "..." if len(clean_message) > 45 else clean_message
-
-            row = [
-                Colors.colorize(str(i), Colors.BRIGHT_MAGENTA, bold=True),
-                Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True),
-                subject,
-                len(target.files),
-                len(target.changed_lines)
-            ]
-
+            # Checkbox
             if selected_indices is not None:
-                row.append(Colors.colorize("✓", Colors.BRIGHT_GREEN, bold=True) if i in selected_indices else "")
-            if commit_types is not None:
-                commit_type = commit_types.get(i, "fixup")
-                if commit_type == "squash":
-                    row.append(Colors.colorize("squash", Colors.BRIGHT_YELLOW, bold=True))
+                if i in selected_indices:
+                    checkbox = Colors.colorize("[✓]", Colors.BRIGHT_GREEN, bold=True)
                 else:
-                    row.append(Colors.colorize("fixup", Colors.BRIGHT_BLUE))
+                    checkbox = Colors.colorize("[ ]", Colors.DIM)
+            else:
+                checkbox = "   "
 
-            rows.append(row)
+            # Number
+            number = Colors.colorize(f"{i}.", Colors.BRIGHT_MAGENTA, bold=True)
 
-        print(tabulate(rows, headers=headers, tablefmt="fancy_grid"))
+            # SHA
+            sha = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
+
+            # Truncate message to fit nicely
+            clean_message = ' '.join(target.commit_message.split())
+            max_msg_len = 50
+            message = clean_message[:max_msg_len] + "..." if len(clean_message) > max_msg_len else clean_message
+
+            # File and line count
+            num_files = len(target.files)
+            num_lines = len(target.changed_lines)
+            file_str = "file" if num_files == 1 else "files"
+            line_str = "line" if num_lines == 1 else "lines"
+            summary = Colors.colorize(f"({num_files} {file_str}, {num_lines} {line_str})", Colors.BRIGHT_BLUE)
+
+            # Print the line
+            print(f"  {checkbox} {number} {sha}  {message} {summary}")
 
     def _show_target_info(self, target: FixupTarget, index: int):
         """Show detailed information about a target."""
@@ -1267,16 +1262,27 @@ class FixupCreator:
         """
         selected = set()
 
-        print()
-        print(Colors.colorize("🎯 Target Selection", Colors.WHITE, bold=True))
-        print(Colors.colorize("Commands: numbers (1,3), ranges (1-3), 'all', 'info N', 'done'", Colors.DIM))
-
         while True:
+            # Display header with selection count
             print()
-            self._display_targets_table(targets, selected_indices=selected)
+            print(Colors.colorize("━" * 80, Colors.CYAN))
+            if selected:
+                header = f"🎯 Target Selection ({len(selected)} of {len(targets)} selected)"
+            else:
+                header = "🎯 Target Selection"
+            print(Colors.colorize(header, Colors.WHITE, bold=True))
+            print(Colors.colorize("━" * 80, Colors.CYAN))
             print()
 
-            response = input(Colors.colorize("🎯 Select targets (or 'done' to continue): ", Colors.BRIGHT_CYAN)).strip()
+            # Display targets in compact format
+            self._display_targets_compact(targets, selected_indices=selected)
+
+            # Commands help
+            print()
+            print(Colors.colorize("Commands: 1,3,5 | 1-3 (range) | all | info N | done", Colors.DIM))
+
+            # Prompt
+            response = input(Colors.colorize("→ ", Colors.BRIGHT_CYAN)).strip()
 
             if not response:
                 continue
@@ -1299,6 +1305,8 @@ class FixupCreator:
                     idx = int(response.split()[1])
                     if 1 <= idx <= len(targets):
                         self._show_target_info(targets[idx - 1], idx)
+                        # Wait for user to press enter before showing list again
+                        input(Colors.colorize("\n[Press Enter to continue]", Colors.DIM))
                     else:
                         print(Colors.colorize(f"⚠️  Invalid index: {idx}", Colors.YELLOW))
                 except (ValueError, IndexError):
