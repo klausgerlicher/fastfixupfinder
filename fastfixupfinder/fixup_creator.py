@@ -1444,6 +1444,8 @@ class FixupCreator:
         Returns:
             True if successful, False otherwise
         """
+        import os
+
         try:
             # Get the commit object
             try:
@@ -1490,44 +1492,97 @@ class FixupCreator:
                 print(Colors.colorize("❌ Aborted", Colors.YELLOW))
                 return False
 
-            # Amend the commit to change it from fixup! to squash! with new message
-            # We need to use git commit --amend with the new squash message
             print()
             print(Colors.colorize("🔄 Rewriting commit...", Colors.CYAN))
-
-            # First, check we're at the right commit or can amend safely
-            current_head = self.repo.head.commit.hexsha
-            if current_head != commit.hexsha:
-                print(Colors.colorize(f"⚠️  Warning: HEAD is not at {commit_sha[:8]}", Colors.YELLOW))
-                print(Colors.colorize(f"   You need to be at the fixup commit to rewrite it", Colors.DIM))
-                print()
-                print(Colors.colorize("Suggested workflow:", Colors.WHITE, bold=True))
-                print(f"  1. git rebase -i <base_commit>")
-                print(f"  2. Mark the commit for 'edit'")
-                print(f"  3. Run: fastfixupfinder resquash {commit_sha[:8]}")
-                print(f"  4. git rebase --continue")
-                return False
 
             # Create the squash! message format that git rebase understands
             squash_message = f"squash! {edited_message}"
 
-            # Amend the commit with the new message
-            self.repo.git.commit('--amend', '-m', squash_message, '--no-verify')
+            # Use git filter-repo or commit --amend in a detached HEAD state
+            # Save current state
+            original_branch = None
+            original_head = self.repo.head.commit.hexsha
 
-            new_commit = self.repo.head.commit
-            new_hash = Colors.colorize(new_commit.hexsha[:8], Colors.BRIGHT_GREEN, bold=True)
+            try:
+                # Check if we're on a branch
+                try:
+                    original_branch = self.repo.active_branch.name
+                except:
+                    # Already in detached HEAD state
+                    pass
 
-            print()
-            print(Colors.colorize("━" * 80, Colors.CYAN))
-            print(f"✅ Successfully converted to squash commit: {new_hash}")
-            print(Colors.colorize("━" * 80, Colors.CYAN))
-            print()
-            print(Colors.colorize("Next steps:", Colors.WHITE, bold=True))
-            print("  If in rebase: git rebase --continue")
-            print("  Otherwise: Use git rebase -i --autosquash to apply")
-            print()
+                # Find parent of the commit
+                parent_commit = commit.parents[0] if commit.parents else None
+                if not parent_commit:
+                    print(Colors.colorize("❌ Cannot rewrite root commit", Colors.BRIGHT_RED))
+                    return False
 
-            return True
+                # Checkout the parent commit
+                self.repo.git.checkout(parent_commit.hexsha)
+
+                # Cherry-pick the fixup commit with the new message
+                try:
+                    self.repo.git.cherry_pick('-n', commit.hexsha)  # -n means --no-commit
+                    self.repo.git.commit('-m', squash_message, '--no-verify', '--author', f'{commit.author.name} <{commit.author.email}>')
+                    new_commit = self.repo.head.commit
+
+                    # Now replay all commits that came after the fixup commit
+                    commits_to_replay = []
+                    for c in self.repo.iter_commits(f'{commit.hexsha}..{original_head}'):
+                        commits_to_replay.insert(0, c)
+
+                    for c in commits_to_replay:
+                        try:
+                            self.repo.git.cherry_pick(c.hexsha)
+                        except Exception as e:
+                            print(Colors.colorize(f"❌ Conflict replaying commit {c.hexsha[:8]}: {e}", Colors.BRIGHT_RED))
+                            print(Colors.colorize("Please resolve conflicts and run: git cherry-pick --continue", Colors.YELLOW))
+                            print(Colors.colorize("Then manually update your branch", Colors.YELLOW))
+                            return False
+
+                    new_head = self.repo.head.commit.hexsha
+
+                    # Update the original branch to point to the new HEAD
+                    if original_branch:
+                        self.repo.git.checkout(original_branch)
+                        self.repo.git.reset('--hard', new_head)
+
+                    new_hash_display = Colors.colorize(new_commit.hexsha[:8], Colors.BRIGHT_GREEN, bold=True)
+                    print()
+                    print(Colors.colorize("━" * 80, Colors.CYAN))
+                    print(f"✅ Successfully converted to squash commit: {new_hash_display}")
+                    print(Colors.colorize("━" * 80, Colors.CYAN))
+                    print()
+                    print(Colors.colorize("The commit message has been rewritten to:", Colors.WHITE, bold=True))
+                    print(f"  {squash_message}")
+                    print()
+                    print(Colors.colorize("Next steps:", Colors.WHITE, bold=True))
+                    print("  Use git rebase -i --autosquash to apply the squash")
+                    print()
+
+                    return True
+
+                except Exception as e:
+                    print(Colors.colorize(f"❌ Error cherry-picking: {e}", Colors.BRIGHT_RED))
+                    # Abort cherry-pick if needed
+                    try:
+                        self.repo.git.cherry_pick('--abort')
+                    except:
+                        pass
+                    raise
+
+            except Exception as e:
+                print(Colors.colorize(f"❌ Error rewriting commit: {e}", Colors.BRIGHT_RED))
+                # Restore original state
+                try:
+                    if original_branch:
+                        self.repo.git.checkout(original_branch)
+                    else:
+                        self.repo.git.checkout(original_head)
+                    print(Colors.colorize("Repository restored to original state", Colors.YELLOW))
+                except:
+                    print(Colors.colorize("⚠️  Warning: Could not restore original state", Colors.BRIGHT_RED))
+                return False
 
         except Exception as e:
             print(Colors.colorize(f"❌ Error during resquash: {e}", Colors.BRIGHT_RED))
