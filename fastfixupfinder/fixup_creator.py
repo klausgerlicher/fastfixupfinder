@@ -130,7 +130,7 @@ class FixupCreator:
                     if target_lines:
                         line_info = f"lines {sorted(target_lines)}"
                         commands.append(f"git add --patch {file_path}  # auto-select {line_info}")
-                commands.append(f'git commit --fixup {target.commit_hash}')
+                commands.append(f'git commit --fixup {target.commit_hash} --no-verify')
                 return None, commands
             
             # Stage only the specific lines related to this target using --patch
@@ -147,8 +147,8 @@ class FixupCreator:
                 return None, commands
             
             # Create the fixup commit
-            commands.append(f'git commit --fixup {target.commit_hash}')
-            self.repo.git.commit(f'--fixup={target.commit_hash}')
+            commands.append(f'git commit --fixup {target.commit_hash} --no-verify')
+            self.repo.git.commit(f'--fixup={target.commit_hash}', '--no-verify')
 
             # Get the hash of the newly created commit
             commit_hash = self.repo.head.commit.hexsha

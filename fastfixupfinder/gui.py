@@ -143,7 +143,7 @@ class PreviewPanel(Static):
             console.print()
             console.print("🚀 [bold white]Commands that will be run:[/bold white]")
             for target_hash in by_target.keys():
-                console.print(f"  git commit --fixup {target_hash[:8]}")
+                console.print(f"  git commit --fixup {target_hash[:8]} --no-verify")
         
         self.update(capture.get())
 
