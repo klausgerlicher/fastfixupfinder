@@ -328,6 +328,38 @@ def gui(repo, org_email):
 
 
 @main.command()
+@click.argument('commit_sha')
+@click.option('--repo', type=click.Path(exists=True, file_okay=False, dir_okay=True), default='.', help='Path to git repository (default: current directory)')
+def resquash(commit_sha, repo):
+    """Convert a fixup! commit to squash! with message editing.
+
+    This command allows you to convert an already created fixup! commit
+    into a squash! commit with the ability to edit the commit message.
+
+    Usage:
+      fastfixupfinder resquash <commit-sha>
+
+    The command will:
+    1. Verify the commit is a fixup! commit
+    2. Extract the original target commit message
+    3. Open your editor to edit the message
+    4. Convert fixup! to squash! with your edited message
+
+    Note: You must be at the commit (HEAD) or in an interactive rebase.
+    """
+    try:
+        creator = FixupCreator(repo)
+        success = creator.resquash_commit(commit_sha)
+
+        if not success:
+            sys.exit(1)
+
+    except Exception as e:
+        click.echo(Colors.colorize(f"❌ Error: {e}", Colors.BRIGHT_RED), err=True)
+        sys.exit(1)
+
+
+@main.command()
 def help_usage():
     """Show usage examples and workflow guidance."""
     help_text = """

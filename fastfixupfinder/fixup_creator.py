@@ -85,6 +85,50 @@ class FixupCreator:
         # Show targets in table format (like status command)
         self._show_diff_table(fixup_targets, context_lines=4)
 
+        # Ask if user wants to mark any for squash (non-interactive mode)
+        print()
+        commit_types = {}
+        squash_messages = {}
+
+        response = input(Colors.colorize("Mark any targets for squash? [y/N]: ", Colors.BRIGHT_YELLOW)).strip().lower()
+
+        if response in ['y', 'yes']:
+            # Show targets for squash selection
+            print()
+            self._display_targets_table(fixup_targets)
+            print()
+            squash_response = input(Colors.colorize("Enter target numbers for squash (or 'none'): ", Colors.BRIGHT_YELLOW)).strip()
+
+            if squash_response.lower() != 'none' and squash_response:
+                squash_indices = self._parse_selection(squash_response, len(fixup_targets))
+
+                # Mark selected as squash
+                for i in range(1, len(fixup_targets) + 1):
+                    commit_types[i] = "squash" if i in squash_indices else "fixup"
+
+                # Edit messages for squash targets
+                if squash_indices:
+                    print()
+                    print(Colors.colorize(f"📝 Editing messages for {len(squash_indices)} squash commit(s)...", Colors.WHITE, bold=True))
+                    for i in sorted(squash_indices):
+                        target = fixup_targets[i - 1]
+                        print()
+                        print(Colors.colorize(f"━━━ Target {i}: {target.commit_hash[:8]} ━━━", Colors.CYAN))
+                        print(f"Original: {target.commit_message[:70]}...")
+                        print()
+                        print(Colors.colorize("✏️  Opening editor...", Colors.CYAN))
+                        custom_message = self._edit_commit_message_in_editor(target.commit_message)
+                        squash_messages[i] = custom_message
+                        print(Colors.colorize(f"✅ Saved: {custom_message[:70]}{'...' if len(custom_message) > 70 else ''}", Colors.GREEN))
+            else:
+                # All fixup
+                for i in range(1, len(fixup_targets) + 1):
+                    commit_types[i] = "fixup"
+        else:
+            # All fixup (default)
+            for i in range(1, len(fixup_targets) + 1):
+                commit_types[i] = "fixup"
+
         if not dry_run:
             # Store target commits for later rebase suggestion
             self._target_commits = [target.commit_hash for target in fixup_targets]
@@ -93,8 +137,15 @@ class FixupCreator:
             if auto_backup:
                 self._create_head_backup()
 
-            for target in fixup_targets:
-                commit_hash, commands = self.create_fixup_commit(target, dry_run)
+            print()
+            print(Colors.colorize("🚀 Creating commits...", Colors.WHITE, bold=True))
+            print()
+
+            for i, target in enumerate(fixup_targets, 1):
+                commit_type = commit_types.get(i, "fixup")
+                custom_message = squash_messages.get(i, None)
+
+                commit_hash, commands = self.create_fixup_commit(target, dry_run, commit_type, custom_message)
                 if commit_hash:
                     created_commits.append(commit_hash)
                 git_commands.extend(commands)
@@ -199,8 +250,8 @@ class FixupCreator:
 
         New workflow:
         1. Select targets from list (with 'info' command for details)
-        2. Mark which targets need squash vs fixup
-        3. Auto-assign lines to targets based on git blame
+        2. Show auto-assigned lines (what will be committed)
+        3. Mark which targets need squash vs fixup (after seeing assignments)
         4. Batch edit messages for squash targets
         5. Create all commits
 
@@ -239,23 +290,23 @@ class FixupCreator:
         if not selected_targets:
             return created_commits
 
-        # Step 2: Mark which targets need squash (rest default to fixup)
-        commit_types = self._iterative_squash_selection(selected_targets)
-
-        # Step 3: Auto-assign lines (all lines already assigned to targets from analysis)
+        # Step 2: Show auto-assigned lines (what will be committed)
         print()
         print(Colors.colorize("━" * 80, Colors.CYAN))
         print(Colors.colorize("🔍 Line Assignment Summary", Colors.WHITE, bold=True))
+        print(Colors.colorize("All lines auto-assigned based on git blame analysis", Colors.DIM))
         print()
         for i, target in enumerate(selected_targets, 1):
             file_summary = {}
             for cl in target.changed_lines:
                 file_summary[cl.file_path] = file_summary.get(cl.file_path, 0) + 1
 
-            commit_type_display = Colors.colorize(commit_types[i], Colors.BRIGHT_YELLOW if commit_types[i] == "squash" else Colors.BRIGHT_BLUE, bold=True)
-            print(f"  {Colors.colorize(f'{i}.', Colors.BRIGHT_MAGENTA, bold=True)} {Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)} [{commit_type_display}]")
+            print(f"  {Colors.colorize(f'{i}.', Colors.BRIGHT_MAGENTA, bold=True)} {Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)}")
             for file_path, count in sorted(file_summary.items()):
                 print(f"     📁 {Colors.colorize(file_path, Colors.BRIGHT_BLUE)}: {count} lines")
+
+        # Step 3: Mark which targets need squash (now you know what's being committed)
+        commit_types = self._iterative_squash_selection(selected_targets)
 
         # Step 4: Batch edit messages for squash targets
         squash_messages = {}
@@ -1383,3 +1434,103 @@ class FixupCreator:
                 print(Colors.colorize(f"✅ Marked {len(indices)} target(s) as squash", Colors.GREEN))
 
         return commit_types
+
+    def resquash_commit(self, commit_sha: str) -> bool:
+        """Convert a fixup! commit to a squash! commit with message editing.
+
+        Args:
+            commit_sha: SHA of the fixup commit to convert
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Get the commit object
+            try:
+                commit = self.repo.commit(commit_sha)
+            except Exception as e:
+                print(Colors.colorize(f"❌ Error: Could not find commit {commit_sha[:8]}", Colors.BRIGHT_RED))
+                print(Colors.colorize(f"   {e}", Colors.DIM))
+                return False
+
+            commit_message = commit.message.strip()
+
+            # Check if it's a fixup commit
+            if not commit_message.startswith('fixup! '):
+                print(Colors.colorize(f"❌ Error: Commit {commit_sha[:8]} is not a fixup! commit", Colors.BRIGHT_RED))
+                print(Colors.colorize(f"   Message: {commit_message[:60]}...", Colors.DIM))
+                return False
+
+            # Extract the original message (remove 'fixup! ' prefix)
+            original_message = commit_message[7:]  # Remove 'fixup! '
+
+            print()
+            print(Colors.colorize("━" * 80, Colors.CYAN))
+            print(Colors.colorize(f"🔄 Converting fixup to squash: {commit_sha[:8]}", Colors.WHITE, bold=True))
+            print(Colors.colorize("━" * 80, Colors.CYAN))
+            print(f"\nCurrent message: fixup! {original_message[:60]}{'...' if len(original_message) > 60 else ''}")
+            print()
+
+            # Edit the message
+            print(Colors.colorize("✏️  Opening editor to edit commit message...", Colors.CYAN))
+            print(Colors.colorize("   The original target commit message is prefilled", Colors.DIM))
+            edited_message = self._edit_commit_message_in_editor(original_message)
+
+            if not edited_message:
+                print(Colors.colorize("❌ Empty message, aborting", Colors.YELLOW))
+                return False
+
+            print()
+            print(Colors.colorize(f"✅ New message: {edited_message[:60]}{'...' if len(edited_message) > 60 else ''}", Colors.GREEN))
+            print()
+
+            # Confirm before making changes
+            confirm = input(Colors.colorize("Convert fixup to squash? [Y/n]: ", Colors.BRIGHT_YELLOW)).strip().lower()
+            if confirm and confirm not in ['y', 'yes']:
+                print(Colors.colorize("❌ Aborted", Colors.YELLOW))
+                return False
+
+            # Amend the commit to change it from fixup! to squash! with new message
+            # We need to use git commit --amend with the new squash message
+            print()
+            print(Colors.colorize("🔄 Rewriting commit...", Colors.CYAN))
+
+            # First, check we're at the right commit or can amend safely
+            current_head = self.repo.head.commit.hexsha
+            if current_head != commit.hexsha:
+                print(Colors.colorize(f"⚠️  Warning: HEAD is not at {commit_sha[:8]}", Colors.YELLOW))
+                print(Colors.colorize(f"   You need to be at the fixup commit to rewrite it", Colors.DIM))
+                print()
+                print(Colors.colorize("Suggested workflow:", Colors.WHITE, bold=True))
+                print(f"  1. git rebase -i <base_commit>")
+                print(f"  2. Mark the commit for 'edit'")
+                print(f"  3. Run: fastfixupfinder resquash {commit_sha[:8]}")
+                print(f"  4. git rebase --continue")
+                return False
+
+            # Create the squash! message format that git rebase understands
+            squash_message = f"squash! {edited_message}"
+
+            # Amend the commit with the new message
+            self.repo.git.commit('--amend', '-m', squash_message, '--no-verify')
+
+            new_commit = self.repo.head.commit
+            new_hash = Colors.colorize(new_commit.hexsha[:8], Colors.BRIGHT_GREEN, bold=True)
+
+            print()
+            print(Colors.colorize("━" * 80, Colors.CYAN))
+            print(f"✅ Successfully converted to squash commit: {new_hash}")
+            print(Colors.colorize("━" * 80, Colors.CYAN))
+            print()
+            print(Colors.colorize("Next steps:", Colors.WHITE, bold=True))
+            print("  If in rebase: git rebase --continue")
+            print("  Otherwise: Use git rebase -i --autosquash to apply")
+            print()
+
+            return True
+
+        except Exception as e:
+            print(Colors.colorize(f"❌ Error during resquash: {e}", Colors.BRIGHT_RED))
+            import traceback
+            traceback.print_exc()
+            return False

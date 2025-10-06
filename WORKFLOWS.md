@@ -1,0 +1,608 @@
+# Fast Fixup Finder Workflows
+
+This document describes all possible workflows for using Fast Fixup Finder to manage fixup and squash commits.
+
+---
+
+## 📋 Table of Contents
+
+1. [Quick Status Check](#1-quick-status-check)
+2. [Non-Interactive Auto-Create](#2-non-interactive-auto-create)
+3. [Non-Interactive with Squash Selection](#3-non-interactive-with-squash-selection)
+4. [Interactive Mode (Streamlined)](#4-interactive-mode-streamlined)
+5. [Visual GUI Mode](#5-visual-gui-mode)
+6. [Dry-Run Preview](#6-dry-run-preview)
+7. [Converting Fixup to Squash (Resquash)](#7-converting-fixup-to-squash-resquash)
+8. [Restore from Backup](#8-restore-from-backup)
+9. [Organization Email Filtering](#9-organization-email-filtering)
+10. [Complete End-to-End Workflow](#10-complete-end-to-end-workflow)
+
+---
+
+## 1. Quick Status Check
+
+**Use Case**: Quickly see what fixup targets are available without making any changes.
+
+### Commands:
+
+```bash
+# Default status (smart filtering)
+fastfixupfinder status
+
+# Compact one-line format
+fastfixupfinder status --oneline
+
+# Detailed analysis with line-by-line breakdown
+fastfixupfinder status --detailed
+
+# Only show high-confidence fixup targets
+fastfixupfinder status --fixups-only
+
+# Include all changes (no filtering)
+fastfixupfinder status --include-all
+```
+
+### Example Output:
+
+```
+🎯 Found 2 potential fixup targets:
+
+• 08743fb3: Add basic calculator with add and subtract functions
+  👤 Author: John Doe <john@example.com>
+  📁 File: main.py
+  📝 Changed lines: 3
+```
+
+### When to Use:
+- Before starting work to see what fixups are pending
+- To verify changes are being detected correctly
+- As part of your daily workflow to maintain clean history
+
+---
+
+## 2. Non-Interactive Auto-Create
+
+**Use Case**: Automatically create all fixup commits without any prompts (fastest workflow).
+
+### Command:
+
+```bash
+# Create all fixup commits automatically
+fastfixupfinder create
+
+# Skip automatic backup
+fastfixupfinder create --no-backup
+```
+
+### Workflow:
+1. Tool analyzes all changes
+2. Auto-assigns lines to target commits
+3. Creates fixup commits for all targets
+4. Creates automatic backup tag
+5. Shows rebase command
+
+### Example:
+
+```bash
+$ fastfixupfinder create
+
+🎯 Found 2 potential fixup targets:
+[Shows table with targets]
+
+🚀 Creating commits...
+
+✅ Created fixup commit a1b2c3d4 for 08743fb3
+✅ Created fixup commit b2c3d4e5 for 59912895
+
+🚀 To apply the fixup commits, run:
+    git rebase -i --autosquash HEAD~5
+```
+
+### When to Use:
+- All changes are clearly fixups
+- You trust the auto-assignment
+- Speed is priority
+- No message editing needed
+
+---
+
+## 3. Non-Interactive with Squash Selection
+
+**Use Case**: Automatically create commits but mark some as squash for message editing during rebase.
+
+### Command:
+
+```bash
+fastfixupfinder create
+```
+
+### Workflow:
+1. Tool shows all targets
+2. **Prompt**: `Mark any targets for squash? [y/N]:`
+   - Press `y` to select squash targets
+   - Press `n` or Enter to skip (all fixup)
+3. If yes: Shows target table
+4. **Prompt**: `Enter target numbers for squash (or 'none'):`
+   - Enter: `1,3` or `1-3` for ranges
+5. Opens editor for each squash target message
+6. Creates all commits (fixup + squash)
+
+### Example:
+
+```bash
+$ fastfixupfinder create
+
+[Shows targets table]
+
+Mark any targets for squash? [y/N]: y
+
+╒═══════╤══════════╤═══════════════════════╕
+│ Index │ SHA      │ Subject               │
+╞═══════╪══════════╪═══════════════════════╡
+│ 1     │ 08743fb3 │ Add basic calculator..│
+│ 2     │ 59912895 │ Add utility functions.│
+╘═══════╧══════════╧═══════════════════════╛
+
+Enter target numbers for squash (or 'none'): 1
+
+📝 Editing messages for 1 squash commit(s)...
+
+━━━ Target 1: 08743fb3 ━━━
+Original: Add basic calculator functions...
+
+✏️  Opening editor...
+[Editor opens]
+
+✅ Saved: Add basic calculator with improved error handling
+
+🚀 Creating commits...
+
+✅ Created squash commit a1b2c3d4 for 08743fb3
+✅ Created fixup commit b2c3d4e5 for 59912895
+```
+
+### When to Use:
+- Most changes are fixups, but some need message editing
+- You want to customize specific commit messages
+- Faster than full interactive mode
+
+---
+
+## 4. Interactive Mode (Streamlined)
+
+**Use Case**: Full control with persistent display and batch processing.
+
+### Command:
+
+```bash
+# Standard interactive mode
+fastfixupfinder create -i
+
+# Compact mode (deprecated - always uses table format now)
+fastfixupfinder create -i --oneline
+```
+
+### Workflow:
+
+**Step 1: Select Targets**
+```
+╒═══════╤══════════╤═══════════════════════╤═══════╤═══════╤══════════╕
+│ Index │ SHA      │ Subject               │ Files │ Lines │ Selected │
+╞═══════╪══════════╪═══════════════════════╪═══════╪═══════╪══════════╡
+│ 1     │ 08743fb3 │ Add basic calculator..│     1 │     3 │          │
+│ 2     │ 59912895 │ Add utility functions.│     1 │     1 │          │
+│ 3     │ abc12345 │ Fix validation logic..│     2 │     5 │          │
+╘═══════╧══════════╧═══════════════════════╧═══════╧═══════╧══════════╛
+
+🎯 Select targets (or 'done' to continue): 1,3
+✅ Added 2 target(s), total: 2
+
+[Table updates with ✓ marks]
+
+🎯 Select targets (or 'done' to continue): done
+```
+
+**Step 2: View Auto-Assigned Lines**
+```
+🔍 Line Assignment Summary
+All lines auto-assigned based on git blame analysis
+
+  1. 08743fb3
+     📁 main.py: 3 lines
+  2. abc12345
+     📁 utils.py: 2 lines
+     📁 helpers.py: 3 lines
+```
+
+**Step 3: Mark Squash Targets**
+```
+╒═══════╤══════════╤═══════════════════════╤═══════╤═══════╤══════╕
+│ Index │ SHA      │ Subject               │ Files │ Lines │ Type │
+╞═══════╪══════════╪═══════════════════════╪═══════╪═══════╪══════╡
+│ 1     │ 08743fb3 │ Add basic calculator..│     1 │     3 │ fixup│
+│ 2     │ abc12345 │ Fix validation logic..│     2 │     5 │ fixup│
+╘═══════╧══════════╧═══════════════════════╧═══════╧═══════╧══════╛
+
+🔧 Mark for squash (or 'done' to continue): 1
+
+[Table updates showing squash type]
+
+🔧 Mark for squash (or 'done' to continue): done
+```
+
+**Step 4: Edit Squash Messages**
+```
+📝 Editing messages for 1 squash commit(s)...
+
+━━━ Target 1/2: 08743fb3 ━━━
+Original: Add basic calculator functions...
+
+✏️  Opening editor...
+✅ Saved: Add basic calculator with improved error handling
+```
+
+**Step 5: Create Commits**
+```
+🚀 Creating commits...
+
+✅ Created squash commit a1b2c3d4 for 08743fb3
+✅ Created fixup commit b2c3d4e5 for abc12345
+
+✅ Created 2 commit(s): 1 fixup, 1 squash
+```
+
+### Interactive Commands:
+
+**Target Selection:**
+- `1,3,5` - Select specific targets
+- `1-3` - Select range of targets
+- `all` - Select all targets
+- `info N` - Show detailed information about target N
+- `done` - Finish selection
+
+**Squash Selection:**
+- `1,3` - Mark targets as squash
+- `all` - Mark all as squash
+- `none` - Reset all to fixup
+- `info N` - Show target details
+- `done` or Enter - Finish selection
+
+### When to Use:
+- Complex changes across multiple commits
+- Need to review what's being committed
+- Want to inspect target details with `info`
+- Selective squash/fixup choices
+- Learning the tool
+
+---
+
+## 5. Visual GUI Mode
+
+**Use Case**: Drag-and-drop visual interface for complex assignments.
+
+### Command:
+
+```bash
+fastfixupfinder gui
+```
+
+### Features:
+- Dual-panel layout (changes left, targets right)
+- Color-coded change classifications
+- Keyboard navigation
+- Real-time assignment tracking
+- Command preview panel
+
+### Keyboard Shortcuts:
+- `TAB` - Switch between panels
+- `↑↓` - Navigate within panels
+- `ENTER` - Assign selected change to target
+- `SPACE` - Quick-assign to suggested target
+- `DEL` - Remove assignment
+- `c` - Create fixup commits
+- `r` - Reset all assignments
+- `q` - Quit GUI
+
+### When to Use:
+- Very complex change sets
+- Visual learners
+- Need to see all assignments at once
+- Frequent reassignment needed
+
+---
+
+## 6. Dry-Run Preview
+
+**Use Case**: Preview what would happen without making any changes.
+
+### Commands:
+
+```bash
+# Preview non-interactive mode
+fastfixupfinder create --dry-run
+
+# Preview interactive mode
+fastfixupfinder create -i --dry-run
+```
+
+### Output:
+
+```
+🔍 Git commands that would be executed:
+
+╒════════╤═══════════════════════════════════════════╕
+│ Step   │ Git Command                               │
+╞════════╪═══════════════════════════════════════════╡
+│ 1      │ git add --patch main.py  # auto-select... │
+├────────┼───────────────────────────────────────────┤
+│ 2      │ git commit --fixup 08743fb3 --no-verify   │
+╘════════╧═══════════════════════════════════════════╛
+```
+
+### When to Use:
+- First time using the tool
+- Verifying command sequences
+- Documenting workflows
+- Testing before actual commit
+- Debugging issues
+
+---
+
+## 7. Converting Fixup to Squash (Resquash)
+
+**Use Case**: Convert an already-created fixup! commit to squash! with message editing.
+
+### Command:
+
+```bash
+fastfixupfinder resquash <commit-sha>
+```
+
+### Workflow:
+
+**Method 1: Direct (if at HEAD)**
+```bash
+# If the fixup commit is at HEAD
+$ fastfixupfinder resquash a1b2c3d4
+
+🔄 Converting fixup to squash: a1b2c3d4
+
+Current message: fixup! Add basic calculator functions...
+
+✏️  Opening editor to edit commit message...
+[Editor opens with original target message]
+
+✅ New message: Add basic calculator with improved error handling
+
+Convert fixup to squash? [Y/n]: y
+
+🔄 Rewriting commit...
+
+✅ Successfully converted to squash commit: e5f6a7b8
+```
+
+**Method 2: During Interactive Rebase**
+```bash
+# Start interactive rebase
+$ git rebase -i HEAD~10
+
+# In editor, mark the fixup commit for 'edit'
+pick abc1234 Some commit
+edit def5678 fixup! Target commit  # ← Mark as 'edit'
+pick ghi9012 Another commit
+
+# Save and exit, git will stop at the fixup commit
+
+# Now convert it
+$ fastfixupfinder resquash def5678
+
+# Continue rebase
+$ git rebase --continue
+```
+
+### Requirements:
+- Must be at the commit (HEAD) or in interactive rebase
+- Commit must start with `fixup!`
+
+### When to Use:
+- Realized you need to edit the message after creating fixup
+- Converting batch fixups to selective squashes
+- Cleanup before pushing
+- Changing strategy mid-rebase
+
+---
+
+## 8. Restore from Backup
+
+**Use Case**: Undo changes and restore to state before fixup creation.
+
+### Command:
+
+```bash
+fastfixupfinder restore
+```
+
+### Workflow:
+1. Shows list of backup tags
+2. Select which backup to restore
+3. Confirms restoration
+4. Resets to backup state
+
+### Example:
+
+```bash
+$ fastfixupfinder restore
+
+Available backups:
+1. fastfixupfinder_backup_20250924_143022 (2 hours ago)
+2. fastfixupfinder_backup_20250924_120515 (5 hours ago)
+
+Select backup to restore (or 'cancel'): 1
+
+⚠️  This will reset your repository to the backup state
+Continue? [y/N]: y
+
+✅ Restored to backup: fastfixupfinder_backup_20250924_143022
+```
+
+### Alternative (Manual):
+```bash
+# List backup tags
+$ git tag | grep fastfixupfinder_backup
+
+# Reset to specific backup
+$ git reset --hard fastfixupfinder_backup_20250924_143022
+```
+
+### When to Use:
+- Made wrong fixup assignments
+- Need to undo and try different approach
+- Emergency recovery
+- Experimentation without risk
+
+---
+
+## 9. Organization Email Filtering
+
+**Use Case**: Only create fixups for commits by your team/organization.
+
+### Command:
+
+```bash
+# Only fixup commits from @mycompany.com authors
+fastfixupfinder status --org-email ".*@mycompany\.com"
+
+# Create fixups only for organization commits
+fastfixupfinder create --org-email ".*@mycompany\.com"
+
+# Interactive with filtering
+fastfixupfinder create -i --org-email ".*@mycompany\.com"
+```
+
+### When to Use:
+- Working on open-source with external contributors
+- Don't want to fixup third-party code
+- Team policy to only fixup own commits
+- Multi-organization repositories
+
+---
+
+## 10. Complete End-to-End Workflow
+
+**Use Case**: Recommended workflow for day-to-day use.
+
+### Full Example:
+
+```bash
+# Step 1: Make your changes
+$ vim src/calculator.py src/utils.py
+$ # ... make changes ...
+
+# Step 2: Check what fixup targets exist
+$ fastfixupfinder status
+🎯 Found 3 potential fixup targets:
+• 08743fb3: Add basic calculator...
+• 59912895: Add utility functions...
+• abc12345: Fix validation logic...
+
+# Step 3: Use interactive mode to create fixups
+$ fastfixupfinder create -i
+
+[Follow interactive workflow:]
+- Select targets: 1,3
+- View auto-assigned lines
+- Mark target 1 as squash
+- Edit squash message
+- Create commits
+
+✅ Created 2 commit(s): 1 fixup, 1 squash
+
+# Step 4: Review what was created
+$ git log --oneline -5
+a1b2c3d squash! Add basic calculator with improved error handling
+b2c3d4e fixup! Fix validation logic
+abc1234 Fix validation logic
+59912895 Add utility functions
+08743fb3 Add basic calculator functions
+
+# Step 5: Apply the fixups with rebase
+$ git rebase -i --autosquash HEAD~5
+
+[Editor opens showing:]
+pick 08743fb3 Add basic calculator functions
+squash a1b2c3d squash! Add basic calculator with improved error handling
+pick 59912895 Add utility functions
+pick abc1234 Fix validation logic
+fixup b2c3d4e fixup! Fix validation logic
+
+# Save and exit - git automatically applies fixups/squashes
+
+# Step 6: Verify clean history
+$ git log --oneline -3
+abc1234 Fix validation logic
+59912895 Add utility functions
+08743fb3 Add basic calculator with improved error handling
+
+# Step 7: Push
+$ git push
+```
+
+### Optional: Convert Fixup to Squash Later
+```bash
+# If you realize you want to edit a fixup message
+$ git rebase -i HEAD~5
+# Mark fixup commit for 'edit'
+
+$ fastfixupfinder resquash <fixup-sha>
+# Edit message
+
+$ git rebase --continue
+```
+
+---
+
+## 🎯 Decision Tree: Which Workflow to Use?
+
+```
+Do you need to review changes?
+├─ No → Use workflow #2 (Non-Interactive Auto-Create)
+│
+└─ Yes → Do you need to edit any commit messages?
+    ├─ No → Use workflow #2 (Non-Interactive Auto-Create)
+    │
+    └─ Yes → How many targets need message editing?
+        ├─ Few → Use workflow #3 (Non-Interactive with Squash)
+        │
+        ├─ Many → Use workflow #4 (Interactive Mode)
+        │
+        └─ Very Complex → Use workflow #5 (Visual GUI Mode)
+
+Already created fixups but need to edit?
+└─ Use workflow #7 (Resquash)
+
+Need to undo everything?
+└─ Use workflow #8 (Restore from Backup)
+```
+
+---
+
+## 📝 Quick Reference
+
+| What I Want | Command |
+|------------|---------|
+| Just check status | `fastfixupfinder status` |
+| Create all fixups fast | `fastfixupfinder create` |
+| Review before creating | `fastfixupfinder create --dry-run` |
+| Full control | `fastfixupfinder create -i` |
+| Visual interface | `fastfixupfinder gui` |
+| Convert fixup to squash | `fastfixupfinder resquash <sha>` |
+| Undo everything | `fastfixupfinder restore` |
+| Filter by team | Add `--org-email ".*@company\.com"` |
+
+---
+
+## 🔗 See Also
+
+- [README.md](README.md) - Getting started and installation
+- [INTERACTIVE_GUIDE.md](INTERACTIVE_GUIDE.md) - Detailed interactive mode guide
+- [SAFETY.md](SAFETY.md) - Safety features and recovery procedures
