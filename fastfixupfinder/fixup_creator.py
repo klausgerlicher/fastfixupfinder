@@ -246,14 +246,15 @@ class FixupCreator:
             return None, commands
     
     def interactive_fixup_selection(self, compact_mode: bool = False, dry_run: bool = False) -> List[str]:
-        """Interactively select which fixup commits to create with new streamlined workflow.
+        """Interactively select which fixup commits to create with streamlined workflow.
 
-        New workflow:
+        Simplified workflow:
         1. Select targets from list (with 'info' command for details)
         2. Show auto-assigned lines (what will be committed)
-        3. Mark which targets need squash vs fixup (after seeing assignments)
-        4. Batch edit messages for squash targets
-        5. Create all commits
+        3. Create all fixup commits
+
+        Note: To convert fixup to squash with message editing, use the resquash command:
+          fastfixupfinder resquash <commit-sha>
 
         Args:
             compact_mode: Ignored - always uses new table-based interface
@@ -282,7 +283,7 @@ class FixupCreator:
 
         count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
         print()
-        print(Colors.colorize("🧠 Interactive Mode - Streamlined Workflow", Colors.WHITE, bold=True))
+        print(Colors.colorize("🧠 Interactive Mode", Colors.WHITE, bold=True))
         print(f"Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}")
 
         # Step 1: Select targets with iterative display
@@ -305,54 +306,31 @@ class FixupCreator:
             for file_path, count in sorted(file_summary.items()):
                 print(f"     📁 {Colors.colorize(file_path, Colors.BRIGHT_BLUE)}: {count} lines")
 
-        # Step 3: Mark which targets need squash (now you know what's being committed)
-        commit_types = self._iterative_squash_selection(selected_targets)
-
-        # Step 4: Batch edit messages for squash targets
-        squash_messages = {}
-        squash_targets_indices = [i for i, ctype in commit_types.items() if ctype == "squash"]
-
-        if squash_targets_indices:
-            print()
-            print(Colors.colorize("━" * 80, Colors.CYAN))
-            print(Colors.colorize(f"📝 Editing messages for {len(squash_targets_indices)} squash commit(s)...", Colors.WHITE, bold=True))
-
-            for i in squash_targets_indices:
-                target = selected_targets[i - 1]
-                print()
-                print(Colors.colorize(f"━━━ Target {i}/{len(selected_targets)}: {target.commit_hash[:8]} ━━━", Colors.CYAN))
-                print(f"Original: {target.commit_message[:70]}...")
-                print()
-                print(Colors.colorize("✏️  Opening editor...", Colors.CYAN))
-                custom_message = self._edit_commit_message_in_editor(target.commit_message)
-                squash_messages[i] = custom_message
-                print(Colors.colorize(f"✅ Saved: {custom_message[:70]}{'...' if len(custom_message) > 70 else ''}", Colors.GREEN))
-
-        # Step 5: Create all commits
+        # Step 3: Create all fixup commits
         print()
         print(Colors.colorize("━" * 80, Colors.CYAN))
-        print(Colors.colorize("🚀 Creating commits...", Colors.WHITE, bold=True))
+        print(Colors.colorize("🚀 Creating fixup commits...", Colors.WHITE, bold=True))
         print()
 
         # Store target commits for later rebase suggestion
         self._target_commits = [target.commit_hash for target in selected_targets]
 
         for i, target in enumerate(selected_targets, 1):
-            commit_type = commit_types[i]
-            custom_message = squash_messages.get(i, None)
-
-            commit_hash, _ = self.create_fixup_commit(target, dry_run, commit_type, custom_message)
+            commit_hash, _ = self.create_fixup_commit(target, dry_run, commit_type="fixup", custom_message=None)
             if commit_hash:
                 created_commits.append(commit_hash)
 
         # Summary
-        fixup_count = sum(1 for t in commit_types.values() if t == "fixup")
-        squash_count = sum(1 for t in commit_types.values() if t == "squash")
-
         print()
         print(Colors.colorize("━" * 80, Colors.CYAN))
-        summary = f"✅ Created {len(created_commits)} commit(s): {fixup_count} fixup, {squash_count} squash"
+        summary = f"✅ Created {len(created_commits)} fixup commit(s)"
         print(Colors.colorize(summary, Colors.BRIGHT_GREEN, bold=True))
+
+        # Suggest resquash workflow
+        if created_commits:
+            print()
+            print(Colors.colorize("💡 Tip: To convert any fixup to squash with message editing:", Colors.CYAN))
+            print(Colors.colorize("   fastfixupfinder resquash <commit-sha>", Colors.WHITE, bold=True))
 
         return created_commits
     
@@ -1370,70 +1348,6 @@ class FixupCreator:
                 print(Colors.colorize(f"✅ Added {len(new_selected)} target(s), total: {len(selected)}", Colors.GREEN))
 
         return [targets[i - 1] for i in sorted(selected)]
-
-    def _iterative_squash_selection(self, selected_targets: List[FixupTarget]) -> dict:
-        """Mark which targets should be squash vs fixup.
-
-        Args:
-            selected_targets: List of targets already selected
-
-        Returns:
-            Dict mapping target index (1-based) to commit type ('fixup'/'squash')
-        """
-        commit_types = {i: "fixup" for i in range(1, len(selected_targets) + 1)}
-
-        print()
-        print(Colors.colorize("━" * 80, Colors.CYAN))
-        print(Colors.colorize(f"Selected {len(selected_targets)} targets for fixup/squash", Colors.WHITE, bold=True))
-        print()
-        print(Colors.colorize("🔧 Squash Type Selection", Colors.WHITE, bold=True))
-        print(Colors.colorize("Commands: numbers (1,3), ranges (1-3), 'all', 'none', 'info N', 'done'", Colors.DIM))
-        print(Colors.colorize("Default: All targets will be fixup commits (automatic message discard)", Colors.DIM))
-
-        while True:
-            print()
-            self._display_targets_table(selected_targets, commit_types=commit_types)
-            print()
-
-            response = input(Colors.colorize("🔧 Mark for squash (or 'done' to continue): ", Colors.BRIGHT_YELLOW)).strip()
-
-            if not response or response.lower() == 'done':
-                break
-
-            if response.lower() == 'none':
-                # Reset all to fixup
-                for i in commit_types:
-                    commit_types[i] = "fixup"
-                print(Colors.colorize("✅ All targets set to fixup", Colors.GREEN))
-                continue
-
-            if response.lower() == 'all':
-                # Set all to squash
-                for i in commit_types:
-                    commit_types[i] = "squash"
-                print(Colors.colorize("✅ All targets set to squash", Colors.GREEN))
-                continue
-
-            # Check for info command
-            if response.lower().startswith('info '):
-                try:
-                    idx = int(response.split()[1])
-                    if 1 <= idx <= len(selected_targets):
-                        self._show_target_info(selected_targets[idx - 1], idx)
-                    else:
-                        print(Colors.colorize(f"⚠️  Invalid index: {idx}", Colors.YELLOW))
-                except (ValueError, IndexError):
-                    print(Colors.colorize("⚠️  Usage: info <number>", Colors.YELLOW))
-                continue
-
-            # Parse selections and mark as squash
-            indices = self._parse_selection(response, len(selected_targets))
-            if indices:
-                for i in indices:
-                    commit_types[i] = "squash"
-                print(Colors.colorize(f"✅ Marked {len(indices)} target(s) as squash", Colors.GREEN))
-
-        return commit_types
 
     def resquash_commit(self, commit_sha: str) -> bool:
         """Convert a fixup! commit to a squash! commit with message editing.
