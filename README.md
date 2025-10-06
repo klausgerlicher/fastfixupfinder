@@ -185,11 +185,11 @@ fastfixupfinder create
 | `status --detailed` | Show detailed analysis with line-by-line breakdown | Code review, verification |
 | `status --fixups-only` | Only show high-confidence fixup targets | Focused workflow, avoiding noise |
 | `status --include-all` | Include all changes regardless of likelihood | Manual review, debugging |
-| `create` | Create fixup commits automatically | Simple cases, trusted automation |
+| `create` | Create fixup commits (prompts for squash option) | Simple cases, trusted automation |
 | `create --dry-run` | Preview what would be created | Safety, verification before commit |
-| `create --interactive` | Line-level control with detailed output | Precise control, complex assignments |
-| `create --interactive --oneline` | Compact interactive mode | Many changes, reduced clutter |
+| `create --interactive` | Select targets interactively (fixups only) | Selective target creation |
 | `gui` | **Visual drag-and-drop interface** | **Complex workflows, visual users** |
+| `resquash <sha>` | **Convert fixup! to squash! with message editing** | **Post-creation message editing** |
 | `create --no-backup` | Skip automatic safety backup | Advanced users, CI environments |
 | `restore` | Restore from automatic safety backup | Error recovery, undo operations |
 | `help-usage` | Show detailed usage examples | Learning, reference |
@@ -455,6 +455,33 @@ Found 2 potential fixup targets:
 
 To apply the fixup commits, run:
 git rebase -i --autosquash HEAD~5
+```
+
+### Converting Fixup to Squash
+
+After creating fixup commits, you can convert any of them to squash commits with message editing:
+
+```bash
+# Convert a specific fixup commit to squash
+fastfixupfinder resquash a1b2c3d4
+
+# The tool will:
+# 1. Verify it's a fixup! commit
+# 2. Find the original target commit
+# 3. Open your editor with the target's full message
+# 4. Rewrite the commit as squash! with your edited message
+```
+
+**Example workflow:**
+```bash
+# Create fixup commits
+fastfixupfinder create -i
+
+# Later, decide to edit one of the messages
+fastfixupfinder resquash abc1234
+
+# The editor opens with the original commit message
+# Edit the message, save, and the fixup becomes a squash
 ```
 
 ## Testing
