@@ -1463,20 +1463,40 @@ class FixupCreator:
                 print(Colors.colorize(f"   Message: {commit_message[:60]}...", Colors.DIM))
                 return False
 
-            # Extract the original message (remove 'fixup! ' prefix)
-            original_message = commit_message[7:]  # Remove 'fixup! '
+            # Extract the fixup target message (remove 'fixup! ' prefix)
+            fixup_target_subject = commit_message[7:]  # Remove 'fixup! '
+
+            # Find the actual target commit by searching for a commit with matching subject
+            target_commit = None
+            target_commit_message = None
+
+            # Search through ancestor commits to find the target
+            for ancestor in self.repo.iter_commits(f'{commit.hexsha}~1', max_count=100):
+                ancestor_subject = ancestor.message.split('\n')[0].strip()
+                if ancestor_subject == fixup_target_subject:
+                    target_commit = ancestor
+                    target_commit_message = ancestor.message.strip()
+                    break
+
+            if not target_commit:
+                # Fallback: use the fixup target subject as the message
+                print(Colors.colorize(f"⚠️  Warning: Could not find target commit for 'fixup! {fixup_target_subject[:40]}...'", Colors.YELLOW))
+                print(Colors.colorize(f"   Using fixup target subject as message", Colors.DIM))
+                target_commit_message = fixup_target_subject
 
             print()
             print(Colors.colorize("━" * 80, Colors.CYAN))
             print(Colors.colorize(f"🔄 Converting fixup to squash: {commit_sha[:8]}", Colors.WHITE, bold=True))
             print(Colors.colorize("━" * 80, Colors.CYAN))
-            print(f"\nCurrent message: fixup! {original_message[:60]}{'...' if len(original_message) > 60 else ''}")
+            print(f"\nFixup commit: fixup! {fixup_target_subject[:60]}{'...' if len(fixup_target_subject) > 60 else ''}")
+            if target_commit:
+                print(f"Target commit: {Colors.colorize(target_commit.hexsha[:8], Colors.BRIGHT_CYAN, bold=True)}")
             print()
 
-            # Edit the message
+            # Edit the message - prefill with the ACTUAL target commit's full message
             print(Colors.colorize("✏️  Opening editor to edit commit message...", Colors.CYAN))
-            print(Colors.colorize("   The original target commit message is prefilled", Colors.DIM))
-            edited_message = self._edit_commit_message_in_editor(original_message)
+            print(Colors.colorize("   The target commit's full message is prefilled for editing", Colors.DIM))
+            edited_message = self._edit_commit_message_in_editor(target_commit_message)
 
             if not edited_message:
                 print(Colors.colorize("❌ Empty message, aborting", Colors.YELLOW))
