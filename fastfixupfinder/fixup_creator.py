@@ -195,16 +195,23 @@ class FixupCreator:
             return None, commands
     
     def interactive_fixup_selection(self, compact_mode: bool = False, dry_run: bool = False) -> List[str]:
-        """Interactively select which fixup commits to create with line-level control.
-        
+        """Interactively select which fixup commits to create with new streamlined workflow.
+
+        New workflow:
+        1. Select targets from list (with 'info' command for details)
+        2. Mark which targets need squash vs fixup
+        3. Auto-assign lines to targets based on git blame
+        4. Batch edit messages for squash targets
+        5. Create all commits
+
         Args:
-            compact_mode: Use compact output for better readability with many changes
+            compact_mode: Ignored - always uses new table-based interface
             dry_run: Show what would be done without making changes
         """
         # Get all fixup targets first
         all_fixup_targets = self.analyzer.find_fixup_targets()  # Uses SMART_DEFAULT
         created_commits = []
-        
+
         # Apply organization filtering if specified
         if self.org_email_pattern:
             fixup_targets = self.analyzer.filter_targets_by_organization(all_fixup_targets, self.org_email_pattern)
@@ -221,116 +228,84 @@ class FixupCreator:
                 print(Colors.colorize("🔍 No fixup targets found.", Colors.YELLOW))
                 print(Colors.colorize("   Working directory is clean or no blame information available.", Colors.DIM))
                 return created_commits
-        
+
         count_text = Colors.colorize(str(len(fixup_targets)), Colors.BRIGHT_GREEN, bold=True)
-        if compact_mode:
-            print(f"🧠 Interactive mode: {count_text} target{'s' if len(fixup_targets) != 1 else ''}:")
-        else:
-            header = f"🧠 Enhanced interactive mode with line-level classification control"
-            print(Colors.colorize(header, Colors.WHITE, bold=True))
-            print(f"Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}:")
-            print()
-        
-        # Get user selection of targets first
-        selected_targets = self._interactive_target_selection(fixup_targets, compact_mode)
+        print()
+        print(Colors.colorize("🧠 Interactive Mode - Streamlined Workflow", Colors.WHITE, bold=True))
+        print(f"Found {count_text} potential fixup target{'s' if len(fixup_targets) != 1 else ''}")
+
+        # Step 1: Select targets with iterative display
+        selected_targets = self._iterative_target_selection(fixup_targets)
         if not selected_targets:
             return created_commits
-        
-        # For each selected target, allow line-level classification control
-        final_targets = []
-        for target in selected_targets:
-            enhanced_target = self._interactive_line_classification(target, compact_mode)
-            if enhanced_target and enhanced_target.changed_lines:
-                final_targets.append(enhanced_target)
-        
-        if not final_targets:
-            print(Colors.colorize("❌ No lines selected for fixup. Exiting.", Colors.YELLOW))
-            return created_commits
-        
-        # Store target commits for later rebase suggestion
-        self._target_commits = [target.commit_hash for target in final_targets]
 
-        # Create selected fixup commits with user choice of fixup/squash
-        for target in final_targets:
-            print()  # Blank line for readability
-            print(Colors.colorize(f"📝 Target: {target.commit_hash[:8]} - {target.commit_message[:60]}...", Colors.WHITE, bold=True))
+        # Step 2: Mark which targets need squash (rest default to fixup)
+        commit_types = self._iterative_squash_selection(selected_targets)
 
-            # Ask user for commit type
-            commit_type = self._ask_commit_type()
+        # Step 3: Auto-assign lines (all lines already assigned to targets from analysis)
+        print()
+        print(Colors.colorize("━" * 80, Colors.CYAN))
+        print(Colors.colorize("🔍 Line Assignment Summary", Colors.WHITE, bold=True))
+        print()
+        for i, target in enumerate(selected_targets, 1):
+            file_summary = {}
+            for cl in target.changed_lines:
+                file_summary[cl.file_path] = file_summary.get(cl.file_path, 0) + 1
 
-            # If squash, ask for custom message
-            custom_message = None
-            if commit_type == "squash":
+            commit_type_display = Colors.colorize(commit_types[i], Colors.BRIGHT_YELLOW if commit_types[i] == "squash" else Colors.BRIGHT_BLUE, bold=True)
+            print(f"  {Colors.colorize(f'{i}.', Colors.BRIGHT_MAGENTA, bold=True)} {Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)} [{commit_type_display}]")
+            for file_path, count in sorted(file_summary.items()):
+                print(f"     📁 {Colors.colorize(file_path, Colors.BRIGHT_BLUE)}: {count} lines")
+
+        # Step 4: Batch edit messages for squash targets
+        squash_messages = {}
+        squash_targets_indices = [i for i, ctype in commit_types.items() if ctype == "squash"]
+
+        if squash_targets_indices:
+            print()
+            print(Colors.colorize("━" * 80, Colors.CYAN))
+            print(Colors.colorize(f"📝 Editing messages for {len(squash_targets_indices)} squash commit(s)...", Colors.WHITE, bold=True))
+
+            for i in squash_targets_indices:
+                target = selected_targets[i - 1]
                 print()
-                print(Colors.colorize("✏️  Opening editor to edit commit message...", Colors.CYAN))
+                print(Colors.colorize(f"━━━ Target {i}/{len(selected_targets)}: {target.commit_hash[:8]} ━━━", Colors.CYAN))
+                print(f"Original: {target.commit_message[:70]}...")
+                print()
+                print(Colors.colorize("✏️  Opening editor...", Colors.CYAN))
                 custom_message = self._edit_commit_message_in_editor(target.commit_message)
-                print(Colors.colorize(f"✅ Message: {custom_message[:60]}{'...' if len(custom_message) > 60 else ''}", Colors.GREEN))
+                squash_messages[i] = custom_message
+                print(Colors.colorize(f"✅ Saved: {custom_message[:70]}{'...' if len(custom_message) > 70 else ''}", Colors.GREEN))
 
-            # Create the commit
+        # Step 5: Create all commits
+        print()
+        print(Colors.colorize("━" * 80, Colors.CYAN))
+        print(Colors.colorize("🚀 Creating commits...", Colors.WHITE, bold=True))
+        print()
+
+        # Store target commits for later rebase suggestion
+        self._target_commits = [target.commit_hash for target in selected_targets]
+
+        for i, target in enumerate(selected_targets, 1):
+            commit_type = commit_types[i]
+            custom_message = squash_messages.get(i, None)
+
             commit_hash, _ = self.create_fixup_commit(target, dry_run, commit_type, custom_message)
             if commit_hash:
                 created_commits.append(commit_hash)
 
+        # Summary
+        fixup_count = sum(1 for t in commit_types.values() if t == "fixup")
+        squash_count = sum(1 for t in commit_types.values() if t == "squash")
+
+        print()
+        print(Colors.colorize("━" * 80, Colors.CYAN))
+        summary = f"✅ Created {len(created_commits)} commit(s): {fixup_count} fixup, {squash_count} squash"
+        print(Colors.colorize(summary, Colors.BRIGHT_GREEN, bold=True))
+
         return created_commits
     
-    def _interactive_target_selection(self, fixup_targets: List[FixupTarget], compact_mode: bool = False) -> List[FixupTarget]:
-        """Interactive selection of target commits."""
-        for i, target in enumerate(fixup_targets, 1):
-            target_num = Colors.colorize(f"{i}.", Colors.BRIGHT_MAGENTA, bold=True)
-            short_hash = Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True)
-            
-            if compact_mode:
-                # Compact format: number, hash, truncated message, counts
-                clean_message = ' '.join(target.commit_message.split())
-                if len(clean_message) > 50:
-                    message = clean_message[:47] + "..."
-                else:
-                    message = clean_message
-                
-                files_count = Colors.colorize(f"({len(target.files)} files, {len(target.changed_lines)} lines)", Colors.DIM)
-                print(f"{target_num} {short_hash}: {message} {files_count}")
-            else:
-                # Full format
-                message = Colors.colorize(target.commit_message, Colors.WHITE, bold=True)
-                print(f"{target_num} {short_hash}: {message}")
-                
-                author = Colors.colorize(f"   👤 Author: {target.author}", Colors.DIM)
-                print(author)
-                
-                files_text = Colors.colorize(', '.join(target.files), Colors.BLUE)
-                print(f"   📁 Files: {files_text}")
-                
-                lines_count = Colors.colorize(str(len(target.changed_lines)), Colors.BRIGHT_YELLOW)
-                print(f"   📝 Changed lines: {lines_count}")
-                print()
-        
-        # Get user selection
-        while True:
-            try:
-                prompt = Colors.colorize("🎯 Select targets ", Colors.BRIGHT_CYAN, bold=True)
-                options = Colors.colorize("(comma-separated numbers, 'all', or 'none')", Colors.DIM)
-                selection = input(f"{prompt}{options}: ").strip()
-                
-                if selection.lower() == 'none':
-                    print(Colors.colorize("❌ No targets selected. Exiting.", Colors.YELLOW))
-                    return []
-                elif selection.lower() == 'all':
-                    return fixup_targets
-                else:
-                    selected_indices = [int(x.strip()) - 1 for x in selection.split(',')]
-                    # Validate indices
-                    if all(0 <= i < len(fixup_targets) for i in selected_indices):
-                        return [fixup_targets[i] for i in selected_indices]
-                    else:
-                        error_msg = Colors.colorize("❌ Invalid selection. Please try again.", Colors.BRIGHT_RED)
-                        print(error_msg)
-                        continue
-            except ValueError:
-                error_msg = Colors.colorize("❌ Invalid input. Please enter numbers separated by commas.", Colors.BRIGHT_RED)
-                print(error_msg)
-                continue
-    
-    def _interactive_line_classification(self, target: FixupTarget, compact_mode: bool = False) -> Optional[FixupTarget]:
+    def _interactive_line_classification_DEPRECATED(self, target: FixupTarget, compact_mode: bool = False) -> Optional[FixupTarget]:
         """Interactive classification control for individual lines within a target.
         
         Args:
@@ -1176,3 +1151,235 @@ class FixupCreator:
             print(f"   Original: {prefill_message}")
             edited = input("> ").strip()
             return edited if edited else prefill_message
+
+    def _display_targets_table(
+        self,
+        targets: List[FixupTarget],
+        selected_indices: Optional[set] = None,
+        commit_types: Optional[dict] = None
+    ):
+        """Display targets in a table with selection state.
+
+        Args:
+            targets: List of fixup targets
+            selected_indices: Set of selected indices (1-based)
+            commit_types: Dict mapping index to commit type ('fixup'/'squash')
+        """
+        headers = ["Index", "SHA", "Subject", "Files", "Lines"]
+
+        if selected_indices is not None:
+            headers.append("Selected")
+        if commit_types is not None:
+            headers.append("Type")
+
+        rows = []
+        for i, target in enumerate(targets, 1):
+            # Truncate subject to fit
+            clean_message = ' '.join(target.commit_message.split())
+            subject = clean_message[:45] + "..." if len(clean_message) > 45 else clean_message
+
+            row = [
+                Colors.colorize(str(i), Colors.BRIGHT_MAGENTA, bold=True),
+                Colors.colorize(target.commit_hash[:8], Colors.BRIGHT_CYAN, bold=True),
+                subject,
+                len(target.files),
+                len(target.changed_lines)
+            ]
+
+            if selected_indices is not None:
+                row.append(Colors.colorize("✓", Colors.BRIGHT_GREEN, bold=True) if i in selected_indices else "")
+            if commit_types is not None:
+                commit_type = commit_types.get(i, "fixup")
+                if commit_type == "squash":
+                    row.append(Colors.colorize("squash", Colors.BRIGHT_YELLOW, bold=True))
+                else:
+                    row.append(Colors.colorize("fixup", Colors.BRIGHT_BLUE))
+
+            rows.append(row)
+
+        print(tabulate(rows, headers=headers, tablefmt="fancy_grid"))
+
+    def _show_target_info(self, target: FixupTarget, index: int):
+        """Show detailed information about a target."""
+        print()
+        print(Colors.colorize("━" * 80, Colors.CYAN))
+        print(Colors.colorize(f"Target {index}: {target.commit_hash}", Colors.WHITE, bold=True))
+        print(Colors.colorize("━" * 80, Colors.CYAN))
+        print(f"\n{Colors.colorize('Commit Message:', Colors.WHITE, bold=True)}")
+        print(f"  {target.commit_message}")
+        print(f"\n{Colors.colorize('Author:', Colors.WHITE, bold=True)}")
+        print(f"  {target.author}")
+        print(f"\n{Colors.colorize('Files Changed:', Colors.WHITE, bold=True)}")
+        for file_path in sorted(target.files):
+            file_lines = [cl for cl in target.changed_lines if cl.file_path == file_path]
+            print(f"  📁 {Colors.colorize(file_path, Colors.BRIGHT_BLUE)} ({len(file_lines)} lines)")
+            for cl in file_lines[:5]:  # Show first 5 lines
+                change_symbol = {"added": "+", "modified": "~", "deleted": "-"}.get(cl.change_type, "?")
+                symbol_color = {"added": Colors.GREEN, "modified": Colors.YELLOW, "deleted": Colors.RED}.get(cl.change_type, Colors.WHITE)
+                print(f"     {Colors.colorize(change_symbol, symbol_color)} L{cl.line_number}: {cl.content[:60]}...")
+            if len(file_lines) > 5:
+                print(f"     ... and {len(file_lines) - 5} more lines")
+        print(Colors.colorize("━" * 80, Colors.CYAN))
+        print()
+
+    def _parse_selection(self, response: str, max_index: int) -> set:
+        """Parse user selection input into set of indices.
+
+        Supports: numbers (1), ranges (1-3), comma-separated (1,3,5)
+
+        Args:
+            response: User input string
+            max_index: Maximum valid index
+
+        Returns:
+            Set of selected indices (1-based)
+        """
+        selected = set()
+        parts = response.replace(' ', '').split(',')
+
+        for part in parts:
+            if '-' in part:
+                # Range: 1-3
+                try:
+                    start, end = part.split('-')
+                    start_idx = int(start)
+                    end_idx = int(end)
+                    if 1 <= start_idx <= max_index and 1 <= end_idx <= max_index:
+                        selected.update(range(start_idx, end_idx + 1))
+                    else:
+                        print(Colors.colorize(f"⚠️  Invalid range: {part}", Colors.YELLOW))
+                except ValueError:
+                    print(Colors.colorize(f"⚠️  Invalid range format: {part}", Colors.YELLOW))
+            else:
+                # Single number
+                try:
+                    idx = int(part)
+                    if 1 <= idx <= max_index:
+                        selected.add(idx)
+                    else:
+                        print(Colors.colorize(f"⚠️  Invalid index: {idx}", Colors.YELLOW))
+                except ValueError:
+                    print(Colors.colorize(f"⚠️  Invalid number: {part}", Colors.YELLOW))
+
+        return selected
+
+    def _iterative_target_selection(self, targets: List[FixupTarget]) -> List[FixupTarget]:
+        """Interactive selection of targets with persistent display.
+
+        Args:
+            targets: List of available fixup targets
+
+        Returns:
+            List of selected targets
+        """
+        selected = set()
+
+        print()
+        print(Colors.colorize("🎯 Target Selection", Colors.WHITE, bold=True))
+        print(Colors.colorize("Commands: numbers (1,3), ranges (1-3), 'all', 'info N', 'done'", Colors.DIM))
+
+        while True:
+            print()
+            self._display_targets_table(targets, selected_indices=selected)
+            print()
+
+            response = input(Colors.colorize("🎯 Select targets (or 'done' to continue): ", Colors.BRIGHT_CYAN)).strip()
+
+            if not response:
+                continue
+
+            if response.lower() == 'done':
+                if selected:
+                    break
+                else:
+                    print(Colors.colorize("⚠️  No targets selected. Please select at least one target.", Colors.YELLOW))
+                    continue
+
+            if response.lower() == 'all':
+                selected = set(range(1, len(targets) + 1))
+                print(Colors.colorize(f"✅ Selected all {len(targets)} targets", Colors.GREEN))
+                continue
+
+            # Check for info command
+            if response.lower().startswith('info '):
+                try:
+                    idx = int(response.split()[1])
+                    if 1 <= idx <= len(targets):
+                        self._show_target_info(targets[idx - 1], idx)
+                    else:
+                        print(Colors.colorize(f"⚠️  Invalid index: {idx}", Colors.YELLOW))
+                except (ValueError, IndexError):
+                    print(Colors.colorize("⚠️  Usage: info <number>", Colors.YELLOW))
+                continue
+
+            # Parse and update selections
+            new_selected = self._parse_selection(response, len(targets))
+            if new_selected:
+                selected.update(new_selected)
+                print(Colors.colorize(f"✅ Added {len(new_selected)} target(s), total: {len(selected)}", Colors.GREEN))
+
+        return [targets[i - 1] for i in sorted(selected)]
+
+    def _iterative_squash_selection(self, selected_targets: List[FixupTarget]) -> dict:
+        """Mark which targets should be squash vs fixup.
+
+        Args:
+            selected_targets: List of targets already selected
+
+        Returns:
+            Dict mapping target index (1-based) to commit type ('fixup'/'squash')
+        """
+        commit_types = {i: "fixup" for i in range(1, len(selected_targets) + 1)}
+
+        print()
+        print(Colors.colorize("━" * 80, Colors.CYAN))
+        print(Colors.colorize(f"Selected {len(selected_targets)} targets for fixup/squash", Colors.WHITE, bold=True))
+        print()
+        print(Colors.colorize("🔧 Squash Type Selection", Colors.WHITE, bold=True))
+        print(Colors.colorize("Commands: numbers (1,3), ranges (1-3), 'all', 'none', 'info N', 'done'", Colors.DIM))
+        print(Colors.colorize("Default: All targets will be fixup commits (automatic message discard)", Colors.DIM))
+
+        while True:
+            print()
+            self._display_targets_table(selected_targets, commit_types=commit_types)
+            print()
+
+            response = input(Colors.colorize("🔧 Mark for squash (or 'done' to continue): ", Colors.BRIGHT_YELLOW)).strip()
+
+            if not response or response.lower() == 'done':
+                break
+
+            if response.lower() == 'none':
+                # Reset all to fixup
+                for i in commit_types:
+                    commit_types[i] = "fixup"
+                print(Colors.colorize("✅ All targets set to fixup", Colors.GREEN))
+                continue
+
+            if response.lower() == 'all':
+                # Set all to squash
+                for i in commit_types:
+                    commit_types[i] = "squash"
+                print(Colors.colorize("✅ All targets set to squash", Colors.GREEN))
+                continue
+
+            # Check for info command
+            if response.lower().startswith('info '):
+                try:
+                    idx = int(response.split()[1])
+                    if 1 <= idx <= len(selected_targets):
+                        self._show_target_info(selected_targets[idx - 1], idx)
+                    else:
+                        print(Colors.colorize(f"⚠️  Invalid index: {idx}", Colors.YELLOW))
+                except (ValueError, IndexError):
+                    print(Colors.colorize("⚠️  Usage: info <number>", Colors.YELLOW))
+                continue
+
+            # Parse selections and mark as squash
+            indices = self._parse_selection(response, len(selected_targets))
+            if indices:
+                for i in indices:
+                    commit_types[i] = "squash"
+                print(Colors.colorize(f"✅ Marked {len(indices)} target(s) as squash", Colors.GREEN))
+
+        return commit_types
